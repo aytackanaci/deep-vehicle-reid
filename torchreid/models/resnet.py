@@ -8,7 +8,7 @@ import torchvision
 import torch.utils.model_zoo as model_zoo
 
 
-__all__ = ['resnet50', 'resnet50_fc512']
+__all__ = ['resnet18', 'resnet50', 'resnet50_fc512']
 
 
 model_urls = {
@@ -100,7 +100,7 @@ class Bottleneck(nn.Module):
 class ResNet(nn.Module):
     """
     Residual network
-    
+
     Reference:
     He et al. Deep Residual Learning for Image Recognition. CVPR 2016.
     """
@@ -113,7 +113,7 @@ class ResNet(nn.Module):
         super(ResNet, self).__init__()
         self.loss = loss
         self.feature_dim = 512 * block.expansion
-        
+
         # backbone network
         self.conv1 = nn.Conv2d(3, 64, kernel_size=7, stride=2, padding=3, bias=False)
         self.bn1 = nn.BatchNorm2d(64)
@@ -123,7 +123,7 @@ class ResNet(nn.Module):
         self.layer2 = self._make_layer(block, 128, layers[1], stride=2)
         self.layer3 = self._make_layer(block, 256, layers[2], stride=2)
         self.layer4 = self._make_layer(block, 512, layers[3], stride=last_stride)
-        
+
         self.global_avgpool = nn.AdaptiveAvgPool2d(1)
         self.fc = self._construct_fc_layer(fc_dims, 512 * block.expansion, dropout_p)
         self.classifier = nn.Linear(self.feature_dim, num_classes)
@@ -159,9 +159,9 @@ class ResNet(nn.Module):
         if fc_dims is None:
             self.feature_dim = input_dim
             return None
-        
+
         assert isinstance(fc_dims, (list, tuple)), "fc_dims must be either list or tuple, but got {}".format(type(fc_dims))
-        
+
         layers = []
         for dim in fc_dims:
             layers.append(nn.Linear(input_dim, dim))
@@ -170,9 +170,9 @@ class ResNet(nn.Module):
             if dropout_p is not None:
                 layers.append(nn.Dropout(p=dropout_p))
             input_dim = dim
-        
+
         self.feature_dim = fc_dims[-1]
-        
+
         return nn.Sequential(*layers)
 
     def _init_params(self):
@@ -207,15 +207,15 @@ class ResNet(nn.Module):
         f = self.featuremaps(x)
         v = self.global_avgpool(f)
         v = v.view(v.size(0), -1)
-        
+
         if self.fc is not None:
             v = self.fc(v)
-        
+
         if not self.training:
             return v
-        
+
         y = self.classifier(v)
-        
+
         if self.loss == {'xent'}:
             return y
         elif self.loss == {'xent', 'htri'}:
@@ -247,6 +247,20 @@ resnet101: block=Bottleneck, layers=[3, 4, 23, 3]
 resnet152: block=Bottleneck, layers=[3, 8, 36, 3]
 """
 
+def resnet18(num_classes, loss, pretrained='imagenet', **kwargs):
+    model = ResNet(
+        num_classes=num_classes,
+        loss=loss,
+        block=Bottleneck,
+        layers=[2, 2, 2, 2],
+        last_stride=2,
+        fc_dims=None,
+        dropout_p=None,
+        **kwargs
+    )
+    if pretrained == 'imagenet':
+        init_pretrained_weights(model, model_urls['resnet18'])
+    return model
 
 def resnet50(num_classes, loss, pretrained='imagenet', **kwargs):
     model = ResNet(
