@@ -21,6 +21,7 @@ from .dukemtmcvidreid import DukeMTMCVidReID
 
 
 __imgreid_factory = {
+    'veri776': VeRi776,
     'market1501': Market1501,
     'cuhk03': CUHK03,
     'dukemtmcreid': DukeMTMCreID,

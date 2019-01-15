@@ -31,9 +31,10 @@ class VeRi776(BaseImageDataset):
     # identities: 776
     # images: 12936 (train) + 3368 (query) + 15913 (gallery)
     """
-    dataset_dir = 'veri776'
+    dataset_dir = 'veri/raw/VeRi'
 
-    def __init__(self, root='data', verbose=True, **kwargs):
+    def __init__(self, root='data',
+            verbose=True, **kwargs):
         super(VeRi776, self).__init__(root)
         self.dataset_dir = osp.join(self.root, self.dataset_dir)
         self.train_dir = osp.join(self.dataset_dir, 'image_train')
@@ -60,8 +61,8 @@ class VeRi776(BaseImageDataset):
 
     def _check_before_run(self):
         """Check if all files are available before going deeper"""
-        if not osp.exists(self.dataset_dir):
-            raise RuntimeError("'{}' is not available".format(self.dataset_dir))
+        # if not osp.exists(self.dataset_dir):
+        #     raise RuntimeError("'{}' is not available".format(self.dataset_dir))
         if not osp.exists(self.train_dir):
             raise RuntimeError("'{}' is not available".format(self.train_dir))
         if not osp.exists(self.query_dir):
@@ -86,7 +87,7 @@ class VeRi776(BaseImageDataset):
             pid, camid = map(int, pattern.search(img_path).groups())
             if pid == -1: continue  # junk images are just ignored
             assert 1 <= pid <= 776  # pid == 0 means background
-            assert 1 <= cam <= 20
+            assert 1 <= camid <= 20
             camid -= 1 # index starts from 0
             if relabel: pid = pid2label[pid]
             dataset.append((img_path, pid, camid))
