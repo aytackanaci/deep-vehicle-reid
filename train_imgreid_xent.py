@@ -34,7 +34,7 @@ args = parser.parse_args()
 
 def main():
     global args
-    
+
     set_random_seed(args.seed)
     if not args.use_avai_gpus: os.environ['CUDA_VISIBLE_DEVICES'] = args.gpu_devices
     use_gpu = torch.cuda.is_available()
@@ -59,7 +59,8 @@ def main():
 
     criterion = CrossEntropyLoss(num_classes=dm.num_train_pids, use_gpu=use_gpu, label_smooth=args.label_smooth)
     optimizer = init_optimizer(model.parameters(), **optimizer_kwargs(args))
-    scheduler = lr_scheduler.MultiStepLR(optimizer, milestones=args.stepsize, gamma=args.gamma)
+    # scheduler = lr_scheduler.MultiStepLR(optimizer, milestones=args.stepsize, gamma=args.gamma)
+    scheduler = lr_scheduler.ReduceLROnPlateau(optimizer, mode='max', factor=0.1, patience=3, verbose=True, threshold=1e-04)
 
     if args.load_weights and check_isfile(args.load_weights):
         # load pretrained weights but ignore layers that don't match in size
@@ -89,7 +90,7 @@ def main():
             queryloader = testloader_dict[name]['query']
             galleryloader = testloader_dict[name]['gallery']
             distmat = test(model, queryloader, galleryloader, use_gpu, return_distmat=True)
-        
+
             if args.visualize_ranks:
                 visualize_ranked_results(
                     distmat, dm.return_testdataset_by_name(name),
@@ -119,24 +120,24 @@ def main():
         start_train_time = time.time()
         train(epoch, model, criterion, optimizer, trainloader, use_gpu)
         train_time += round(time.time() - start_train_time)
-        
+
         scheduler.step()
-        
+
         if (epoch + 1) > args.start_eval and args.eval_freq > 0 and (epoch + 1) % args.eval_freq == 0 or (epoch + 1) == args.max_epoch:
             print("=> Test")
-            
+
             for name in args.target_names:
                 print("Evaluating {} ...".format(name))
                 queryloader = testloader_dict[name]['query']
                 galleryloader = testloader_dict[name]['gallery']
                 rank1 = test(model, queryloader, galleryloader, use_gpu)
                 ranklogger.write(name, epoch + 1, rank1)
-            
+
             if use_gpu:
                 state_dict = model.module.state_dict()
             else:
                 state_dict = model.state_dict()
-            
+
             save_checkpoint({
                 'state_dict': state_dict,
                 'rank1': rank1,
@@ -165,10 +166,10 @@ def train(epoch, model, criterion, optimizer, trainloader, use_gpu, fixbase=Fals
     end = time.time()
     for batch_idx, (imgs, pids, _, _) in enumerate(trainloader):
         data_time.update(time.time() - end)
-        
+
         if use_gpu:
             imgs, pids = imgs.cuda(), pids.cuda()
-        
+
         outputs = model(imgs)
         if isinstance(outputs, (tuple, list)):
             loss = DeepSupervision(criterion, outputs, pids)
@@ -189,13 +190,13 @@ def train(epoch, model, criterion, optimizer, trainloader, use_gpu, fixbase=Fals
                   'Loss {loss.val:.4f} ({loss.avg:.4f})\t'.format(
                    epoch + 1, batch_idx + 1, len(trainloader), batch_time=batch_time,
                    data_time=data_time, loss=losses))
-        
+
         end = time.time()
 
 
 def test(model, queryloader, galleryloader, use_gpu, ranks=[1, 5, 10, 20], return_distmat=False):
     batch_time = AverageMeter()
-    
+
     model.eval()
 
     with torch.no_grad():
@@ -206,7 +207,7 @@ def test(model, queryloader, galleryloader, use_gpu, ranks=[1, 5, 10, 20], retur
             end = time.time()
             features = model(imgs)
             batch_time.update(time.time() - end)
-            
+
             features = features.data.cpu()
             qf.append(features)
             q_pids.extend(pids)
