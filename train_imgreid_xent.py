@@ -26,10 +26,26 @@ from torchreid.utils.generaltools import set_random_seed
 from torchreid.eval_metrics import evaluate, accuracy
 from torchreid.optimizers import init_optimizer
 
+def exp_name(cfg):
+    name = [
+        '_'.join(cfg.target_names),
+        # cfg.exp_prefix,
+        cfg.arch,
+        'ep_warmup' + str(cfg.fixbase_epoch),
+        'ep_max' + str(cfg.max_epoch),
+        'b' + str(cfg.train_batch_size),
+        cfg.optim,
+        'lr' + str(cfg.lr),
+        'wd' + str(cfg.weight_decay),
+        ]
 
-# global variables
+    return '_'.join(name)
+
+# read config
 parser = argument_parser()
 args = parser.parse_args()
+args.start_eval = args.max_epoch - 10
+args.save_dir = exp_name(args)
 
 
 def main():
@@ -62,8 +78,7 @@ def main():
     # scheduler = lr_scheduler.MultiStepLR(optimizer, milestones=args.stepsize, gamma=args.gamma)
     scheduler = lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.1, patience=3, verbose=True, threshold=1e-04)
 
-    if args.load_weights and check_isfile(args.load_weights):
-        # load pretrained weights but ignore layers that don't match in size
+    if args.load_weights and check_isfile(args.load_weights): # load pretrained weights but ignore layers that don't match in size
         checkpoint = torch.load(args.load_weights)
         pretrain_dict = checkpoint['state_dict']
         model_dict = model.state_dict()
@@ -110,7 +125,8 @@ def main():
 
         for epoch in range(args.fixbase_epoch):
             start_train_time = time.time()
-            train(epoch, model, criterion, optimizer, trainloader, use_gpu, fixbase=True)
+            loss, prec1 = train(epoch, model, criterion, optimizer, trainloader, use_gpu, fixbase=True)
+            print('Epoch: [{:02d}] [Average Loss:] {:.4f}\t [Average Prec.:] {:.2%}'.format(epoch+1, loss, prec1))
             train_time += round(time.time() - start_train_time)
 
         print("Done. All layers are open to train for {} epochs".format(args.max_epoch))
