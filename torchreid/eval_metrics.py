@@ -8,6 +8,8 @@ from collections import defaultdict
 import sys
 import warnings
 
+from .utils.generaltools import to_numpy, to_torch
+
 try:
     from torchreid.eval_cylib.eval_metrics_cy import evaluate_cy
     IS_CYTHON_AVAI = True
@@ -24,11 +26,11 @@ def eval_cuhk03(distmat, q_pids, g_pids, q_camids, g_camids, max_rank):
     """
     num_repeats = 10
     num_q, num_g = distmat.shape
-    
+
     if num_g < max_rank:
         max_rank = num_g
         print("Note: number of gallery samples is quite small, got {}".format(num_g))
-    
+
     indices = np.argsort(distmat, axis=1)
     matches = (g_pids[indices] == q_pids[:, np.newaxis]).astype(np.int32)
 
@@ -36,7 +38,7 @@ def eval_cuhk03(distmat, q_pids, g_pids, q_camids, g_camids, max_rank):
     all_cmc = []
     all_AP = []
     num_valid_q = 0. # number of valid query
-    
+
     for q_idx in range(num_q):
         # get query pid and camid
         q_pid = q_pids[q_idx]
@@ -75,7 +77,7 @@ def eval_cuhk03(distmat, q_pids, g_pids, q_camids, g_camids, max_rank):
             tmp_cmc = [x / (i+1.) for i, x in enumerate(tmp_cmc)]
             tmp_cmc = np.asarray(tmp_cmc) * masked_raw_cmc
             AP += tmp_cmc.sum() / num_rel
-        
+
         cmc /= num_repeats
         AP /= num_repeats
         all_cmc.append(cmc)
@@ -96,11 +98,11 @@ def eval_market1501(distmat, q_pids, g_pids, q_camids, g_camids, max_rank):
     Key: for each query identity, its gallery images from the same camera view are discarded.
     """
     num_q, num_g = distmat.shape
-    
+
     if num_g < max_rank:
         max_rank = num_g
         print("Note: number of gallery samples is quite small, got {}".format(num_g))
-    
+
     indices = np.argsort(distmat, axis=1)
     matches = (g_pids[indices] == q_pids[:, np.newaxis]).astype(np.int32)
 
@@ -108,7 +110,7 @@ def eval_market1501(distmat, q_pids, g_pids, q_camids, g_camids, max_rank):
     all_cmc = []
     all_AP = []
     num_valid_q = 0. # number of valid query
-    
+
     for q_idx in range(num_q):
         # get query pid and camid
         q_pid = q_pids[q_idx]
@@ -161,3 +163,20 @@ def evaluate(distmat, q_pids, g_pids, q_camids, g_camids, max_rank=50, use_metri
         return evaluate_cy(distmat, q_pids, g_pids, q_camids, g_camids, max_rank, use_metric_cuhk03)
     else:
         return evaluate_py(distmat, q_pids, g_pids, q_camids, g_camids, max_rank, use_metric_cuhk03)
+
+# Classification topk metric
+
+def accuracy(output, target, topk=(1,)):
+    output, target = to_torch(output), to_torch(target)
+    maxk = max(topk)
+    batch_size = target.size(0)
+
+    _, pred = output.topk(maxk, 1, True, True)
+    pred = pred.t()
+    correct = pred.eq(target.view(1, -1).expand_as(pred))
+
+    ret = []
+    for k in topk:
+        correct_k = correct[:k].view(-1).float().sum(dim=0, keepdim=True)
+        ret.append(correct_k.mul_(1. / batch_size))
+    return ret

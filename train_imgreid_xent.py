@@ -23,7 +23,7 @@ from torchreid.utils.loggers import Logger, RankLogger
 from torchreid.utils.torchtools import count_num_param, open_all_layers, open_specified_layers
 from torchreid.utils.reidtools import visualize_ranked_results
 from torchreid.utils.generaltools import set_random_seed
-from torchreid.eval_metrics import evaluate
+from torchreid.eval_metrics import evaluate, accuracy
 from torchreid.optimizers import init_optimizer
 
 
@@ -60,7 +60,7 @@ def main():
     criterion = CrossEntropyLoss(num_classes=dm.num_train_pids, use_gpu=use_gpu, label_smooth=args.label_smooth)
     optimizer = init_optimizer(model.parameters(), **optimizer_kwargs(args))
     # scheduler = lr_scheduler.MultiStepLR(optimizer, milestones=args.stepsize, gamma=args.gamma)
-    scheduler = lr_scheduler.ReduceLROnPlateau(optimizer, mode='max', factor=0.1, patience=3, verbose=True, threshold=1e-04)
+    scheduler = lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.1, patience=3, verbose=True, threshold=1e-04)
 
     if args.load_weights and check_isfile(args.load_weights):
         # load pretrained weights but ignore layers that don't match in size
@@ -118,10 +118,11 @@ def main():
 
     for epoch in range(args.start_epoch, args.max_epoch):
         start_train_time = time.time()
-        train(epoch, model, criterion, optimizer, trainloader, use_gpu)
+        loss, prec1 = train(epoch, model, criterion, optimizer, trainloader, use_gpu)
+        print('Epoch: [{:02d}] [Average Loss:] {:.4f}\t [Average Prec.:] {:.2%}'.format(epoch+1, loss, prec1))
         train_time += round(time.time() - start_train_time)
 
-        scheduler.step()
+        scheduler.step(loss)
 
         if (epoch + 1) > args.start_eval and args.eval_freq > 0 and (epoch + 1) % args.eval_freq == 0 or (epoch + 1) == args.max_epoch:
             print("=> Test")
@@ -153,6 +154,7 @@ def main():
 
 def train(epoch, model, criterion, optimizer, trainloader, use_gpu, fixbase=False):
     losses = AverageMeter()
+    precisions = AverageMeter()
     batch_time = AverageMeter()
     data_time = AverageMeter()
 
@@ -175,6 +177,10 @@ def train(epoch, model, criterion, optimizer, trainloader, use_gpu, fixbase=Fals
             loss = DeepSupervision(criterion, outputs, pids)
         else:
             loss = criterion(outputs, pids)
+
+        prec, = accuracy(outputs.data, pids.data)
+        prec1 = prec[0]  # get top 1
+
         optimizer.zero_grad()
         loss.backward()
         optimizer.step()
@@ -182,16 +188,20 @@ def train(epoch, model, criterion, optimizer, trainloader, use_gpu, fixbase=Fals
         batch_time.update(time.time() - end)
 
         losses.update(loss.item(), pids.size(0))
+        precisions.update(prec1, pids.size(0))
 
         if (batch_idx + 1) % args.print_freq == 0:
-            print('Epoch: [{0}][{1}/{2}]\t'
+            print('Epoch: [{0:02d}][{1}/{2}]\t'
                   'Time {batch_time.val:.3f} ({batch_time.avg:.3f})\t'
                   'Data {data_time.val:.4f} ({data_time.avg:.4f})\t'
-                  'Loss {loss.val:.4f} ({loss.avg:.4f})\t'.format(
+                  'Loss {loss.val:.4f} ({loss.avg:.4f})\t'
+                  'Prec {prec.val:.2%} ({prec.avg:.2%})\t'.format(
                    epoch + 1, batch_idx + 1, len(trainloader), batch_time=batch_time,
-                   data_time=data_time, loss=losses))
+                   data_time=data_time, loss=losses, prec=precisions))
 
         end = time.time()
+
+    return losses.avg, precisions.avg
 
 
 def test(model, queryloader, galleryloader, use_gpu, ranks=[1, 5, 10, 20], return_distmat=False):
