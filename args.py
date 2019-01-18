@@ -49,11 +49,11 @@ def argument_parser():
     # ************************************************************
     # Optimization options
     # ************************************************************
-    parser.add_argument('--optim', type=str, default='adam',
+    parser.add_argument('--optim', type=str, default='sgd',
                         help="optimization algorithm (see optimizers.py)")
-    parser.add_argument('--lr', default=0.1, type=float,
+    parser.add_argument('--lr', default=0.01, type=float,
                         help="initial learning rate")
-    parser.add_argument('--weight-decay', default=1e-05, type=float,
+    parser.add_argument('--weight-decay', default=5e-04, type=float,
                         help="weight decay")
     # sgd
     parser.add_argument('--momentum', default=0.9, type=float,
@@ -78,12 +78,12 @@ def argument_parser():
                         help="maximum epochs to run")
     parser.add_argument('--start-epoch', default=0, type=int,
                         help="manual epoch number (useful when restart)")
-    parser.add_argument('--stepsize', default=[20, 40], nargs='+', type=int,
+    parser.add_argument('--stepsize', default=[40], nargs='+', type=int,
                         help="stepsize to decay learning rate")
     parser.add_argument('--gamma', default=0.1, type=float,
                         help="learning rate decay")
 
-    parser.add_argument('--train-batch-size', default=64, type=int,
+    parser.add_argument('--train-batch-size', default=128, type=int,
                         help="training batch size")
     parser.add_argument('--test-batch-size', default=100, type=int,
                         help="test batch size")
@@ -127,7 +127,7 @@ def argument_parser():
                         help="load pretrained weights but ignore layers that don't match in size")
     parser.add_argument('--evaluate', action='store_true',
                         help="evaluate only")
-    parser.add_argument('--eval-freq', type=int, default=1,
+    parser.add_argument('--eval-freq', type=int, default=-1,
                         help="evaluation frequency (set to -1 to test only in the end)")
     parser.add_argument('--start-eval', type=int, default=0,
                         help="start to evaluate after a specific epoch")

@@ -32,6 +32,7 @@ def exp_name(cfg):
         # cfg.exp_prefix,
         cfg.arch,
         'ep_warmup' + str(cfg.fixbase_epoch),
+        str(cfg.stepsize),
         'ep_max' + str(cfg.max_epoch),
         'b' + str(cfg.train_batch_size),
         cfg.optim,
@@ -110,7 +111,7 @@ def main():
                 visualize_ranked_results(
                     distmat, dm.return_testdataset_by_name(name),
                     save_dir=osp.join(args.save_dir, 'ranked_results', name),
-                    topk=20
+                    topk=100
                 )
         return
 
@@ -160,6 +161,14 @@ def main():
                 'rank1': rank1,
                 'epoch': epoch,
             }, False, osp.join(args.save_dir, 'checkpoint_ep' + str(epoch + 1) + '.pth.tar'))
+
+
+    # save last checkpoint
+    save_checkpoint({
+        'state_dict': state_dict,
+        'rank1': rank1,
+        'epoch': epoch,
+    }, False, osp.join(args.save_dir, 'checkpoint_ep' + str(epoch + 1) + '.pth.tar'))
 
     elapsed = round(time.time() - start_time)
     elapsed = str(datetime.timedelta(seconds=elapsed))
