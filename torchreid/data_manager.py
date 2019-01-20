@@ -51,7 +51,8 @@ class ImageDataManager(BaseDataManager):
                  train_sampler='',
                  num_instances=4, # number of instances per identity (for RandomIdentitySampler)
                  cuhk03_labeled=False, # use cuhk03's labeled or detected images
-                 cuhk03_classic_split=False # use cuhk03's classic split or 767/700 split
+                 cuhk03_classic_split=False, # use cuhk03's classic split or 767/700 split
+                 aic19_manual_labels=False
                  ):
         super(ImageDataManager, self).__init__()
         self.use_gpu = use_gpu
@@ -68,6 +69,7 @@ class ImageDataManager(BaseDataManager):
         self.num_instances = num_instances
         self.cuhk03_labeled = cuhk03_labeled
         self.cuhk03_classic_split = cuhk03_classic_split
+        self.aic19_manual_labels = aic19_manual_labels
 
         # Build train and test transform functions
         transform_train = build_transforms(self.height, self.width, is_train=True)
@@ -99,7 +101,7 @@ class ImageDataManager(BaseDataManager):
                 batch_size=self.train_batch_size, shuffle=False, num_workers=self.workers,
                 pin_memory=self.use_gpu, drop_last=True
             )
-        
+
         else:
             self.trainloader = DataLoader(
                 ImageDataset(self.train, transform=transform_train),
@@ -110,11 +112,11 @@ class ImageDataManager(BaseDataManager):
         print("=> Initializing TEST (target) datasets")
         self.testloader_dict = {name: {'query': None, 'gallery': None} for name in self.target_names}
         self.testdataset_dict = {name: {'query': None, 'gallery': None} for name in self.target_names}
-        
+
         for name in self.target_names:
             dataset = init_imgreid_dataset(
                 root=self.root, name=name, split_id=self.split_id, cuhk03_labeled=self.cuhk03_labeled,
-                cuhk03_classic_split=self.cuhk03_classic_split
+                cuhk03_classic_split=self.cuhk03_classic_split, aic19_manual_labels=self.aic19_manual_labels
             )
 
             self.testloader_dict[name]['query'] = DataLoader(

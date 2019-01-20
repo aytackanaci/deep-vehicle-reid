@@ -37,7 +37,7 @@ def argument_parser():
                         help="how to pool features over a tracklet (for video reid)")
 
     # ************************************************************
-    # CUHK03-specific setting
+    # Dataset specific setting
     # ************************************************************
     parser.add_argument('--cuhk03-labeled', action='store_true',
                         help="use labeled images, if false, use detected images")
@@ -45,6 +45,8 @@ def argument_parser():
                         help="use classic split by Li et al. CVPR'14")
     parser.add_argument('--use-metric-cuhk03', action='store_true',
                         help="use cuhk03's metric for evaluation")
+    parser.add_argument('--aic19-manual-labels', action='store_true',
+                        help="use manually labeled querys")
 
     # ************************************************************
     # Optimization options
@@ -173,7 +175,8 @@ def image_dataset_kwargs(parsed_args):
         'train_sampler': parsed_args.train_sampler,
         'num_instances': parsed_args.num_instances,
         'cuhk03_labeled': parsed_args.cuhk03_labeled,
-        'cuhk03_classic_split': parsed_args.cuhk03_classic_split
+        'cuhk03_classic_split': parsed_args.cuhk03_classic_split,
+        'aic19_manual_labels': parsed_args.aic19_manual_labels,
     }
 
 

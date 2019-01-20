@@ -20,7 +20,7 @@ from .bases import BaseImageDataset
 
 class Aic19Track2(BaseImageDataset):
     """
-    VeRi-776
+    AIC 2019 Track2 (Re-ID)
 
     Reference:
     Zheng et al. Scalable Person Re-identification: A Benchmark. ICCV 2015.
@@ -28,13 +28,13 @@ class Aic19Track2(BaseImageDataset):
     URL: http://www.liangzheng.org/Project/project_reid.html
 
     Dataset statistics:
-    # identities: 776
+    # identities: 666
     # images: 12936 (train) + 3368 (query) + 15913 (gallery)
     """
     dataset_dir = 'aic19-track2-reid'
 
-    def __init__(self, root='data',
-            verbose=True, **kwargs):
+    def __init__(self, root='data', verbose=True, aic19_manual_labels=False, **kwargs):
+
         super(Aic19Track2, self).__init__(root)
         self.dataset_dir = osp.join(self.root, self.dataset_dir)
         self.train_dir = osp.join(self.dataset_dir, 'image_train')
@@ -43,11 +43,24 @@ class Aic19Track2(BaseImageDataset):
 
         self.train_label_csv = osp.join(self.dataset_dir, 'train_label_xml.csv')
 
+        self.gallery_tracks_csv = osp.join(self.dataset_dir, 'test_track_id.txt')
+        self.gallery_manual_id_csv = osp.join(self.dataset_dir, 'test_track_manual_ids.txt')
+        self.query_manual_csv = osp.join(self.dataset_dir, 'name_query_manual.txt')
+
         self._check_before_run()
 
         train = self._process_label_csv(self.train_label_csv, relabel=True)
-        query = self._process_dir(self.query_dir, 0, relabel=False)
-        gallery = self._process_dir(self.gallery_dir, 1, relabel=False)
+        if aic19_manual_labels:
+            query, gallery = self._process_manual_labels(
+                    self.gallery_dir,
+                    self.query_dir,
+                    self.gallery_tracks_csv,
+                    self.gallery_manual_id_csv,
+                    self.query_manual_csv)
+
+        else:
+            query = self._process_dir(self.query_dir, 0, relabel=False)
+            gallery = self._process_dir(self.gallery_dir, 1, relabel=False)
 
         if verbose:
             print("=> Aic19_track2 loaded")
@@ -71,6 +84,35 @@ class Aic19Track2(BaseImageDataset):
             raise RuntimeError("'{}' is not available".format(self.query_dir))
         if not osp.exists(self.gallery_dir):
             raise RuntimeError("'{}' is not available".format(self.gallery_dir))
+
+    def _process_manual_labels(self, gallery_dir, query_dir, tracks_path, gallery_csv_path, query_csv_path):
+        def read_csv(path):
+            with open(path, 'r') as file:
+                lines = file.readlines()
+                lines = [t.strip().split(' ') for t in lines]
+
+            return lines
+
+        tracks = read_csv(tracks_path)
+        gallery_ids = read_csv(gallery_csv_path)
+        query_ids = read_csv(query_csv_path)
+
+        gallery = self._process_dir(gallery_dir, 1)
+        num_gallery_images = len(gallery)
+
+        for (track_id, man_idx, _, _, _) in gallery_ids:
+            track = tracks[int(track_id)-1]
+            for im in track:
+                gallery[int(im)-1] = (
+                        gallery[int(im)-1][0],
+                        num_gallery_images + int(man_idx),
+                        gallery[int(im)-1][2])
+
+        labelled_query = filter(lambda x: len(x) == 2, query_ids)
+        query = [(osp.join(self.query_dir, query), num_gallery_images + int(man_idx), 0) for query, man_idx in labelled_query]
+
+        return query, gallery
+
 
     def _process_label_csv(self, fpath, relabel=False):
         def getClasses(imlist):
