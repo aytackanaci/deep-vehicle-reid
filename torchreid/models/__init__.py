@@ -11,6 +11,7 @@ from .xception import *
 
 from .nasnet import *
 from .mobilenetv2 import *
+from .mobilenetv2_pre import *
 from .shufflenet import *
 from .squeezenet import *
 
@@ -39,7 +40,8 @@ __model_factory = {
     'xception': xception,
     # lightweight models
     'nasnsetmobile': nasnetamobile,
-    'mobilenetv2': MobileNetV2,
+    'mobilenetv2': mobilenetv2,
+    'mobilenetv2ws': mobilenetv2ws,
     'shufflenet': shufflenet,
     'squeezenet1_0': squeezenet1_0,
     'squeezenet1_0_fc512': squeezenet1_0_fc512,

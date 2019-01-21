@@ -70,8 +70,9 @@ def main():
     dm = ImageDataManager(use_gpu, **image_dataset_kwargs(args))
     trainloader, testloader_dict = dm.return_dataloaders()
 
+
     print("Initializing model: {}".format(args.arch))
-    model = models.init_model(name=args.arch, num_classes=dm.num_train_pids, loss={'xent'}, use_gpu=use_gpu)
+    model = models.init_model(name=args.arch, num_classes=dm.num_train_pids, input_size=args.width, loss={'xent'}, use_gpu=use_gpu)
     print("Model size: {:.3f} M".format(count_num_param(model)))
 
     criterion = CrossEntropyLoss(num_classes=dm.num_train_pids, use_gpu=use_gpu, label_smooth=args.label_smooth)
@@ -88,6 +89,7 @@ def main():
         model.load_state_dict(model_dict)
         print("Loaded pretrained weights from '{}'".format(args.load_weights))
 
+    # sys.exit(0)
     if args.resume and check_isfile(args.resume):
         checkpoint = torch.load(args.resume)
         model.load_state_dict(checkpoint['state_dict'])

@@ -76,7 +76,7 @@ def argument_parser():
     # ************************************************************
     # Training hyperparameters
     # ************************************************************
-    parser.add_argument('--max-epoch', default=60, type=int,
+    parser.add_argument('--max-epoch', default=50, type=int,
                         help="maximum epochs to run")
     parser.add_argument('--start-epoch', default=0, type=int,
                         help="manual epoch number (useful when restart)")
@@ -129,7 +129,7 @@ def argument_parser():
                         help="load pretrained weights but ignore layers that don't match in size")
     parser.add_argument('--evaluate', action='store_true',
                         help="evaluate only")
-    parser.add_argument('--eval-freq', type=int, default=-1,
+    parser.add_argument('--eval-freq', type=int, default=2,
                         help="evaluation frequency (set to -1 to test only in the end)")
     parser.add_argument('--start-eval', type=int, default=0,
                         help="start to evaluate after a specific epoch")
