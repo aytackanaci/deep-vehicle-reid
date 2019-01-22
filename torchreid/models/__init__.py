@@ -19,6 +19,7 @@ from .mudeep import *
 from .hacnn import *
 from .pcb import *
 from .mlfn import *
+from .yanbei import *
 
 
 __model_factory = {
@@ -53,6 +54,7 @@ __model_factory = {
     'pcb_p6': pcb_p6,
     'pcb_p4': pcb_p4,
     'mlfn': mlfn,
+    'dpfl': dpfl,
 }
 
 

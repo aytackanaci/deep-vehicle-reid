@@ -100,6 +100,7 @@ class MobileNetV2wS(nn.Module):
 
         super(MobileNetV2wS, self).__init__()
 
+        self.feature_extract_mode = False
         self.scale = scale
         self.t = t
         self.activation_type = activation
@@ -226,7 +227,7 @@ class MobileNetV2wS(nn.Module):
         if self.pre_fc is not None:
             v = self.pre_fc(v)
 
-        if not self.training:
+        if not self.training or self.feature_extract_mode:
             return v
 
         y = self.fc(v)

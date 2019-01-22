@@ -27,6 +27,25 @@ def read_image(img_path):
             pass
     return img
 
+class MultiScaleImageDataset(Dataset):
+    """Image Person ReID Dataset"""
+    def __init__(self, dataset, transforms=None):
+        self.dataset = dataset
+        self.transforms = transforms
+
+    def __len__(self):
+        return len(self.dataset)
+
+    def __getitem__(self, index):
+        img_path, pid, camid = self.dataset[index]
+        img = read_image(img_path)
+
+        if self.transforms is not None:
+            assert isinstance(self.transforms, (list, tuple))
+            imgs = [transform(img) for transform in self.transforms]
+
+        return imgs, pid, camid, img_path
+
 
 class ImageDataset(Dataset):
     """Image Person ReID Dataset"""
@@ -40,10 +59,10 @@ class ImageDataset(Dataset):
     def __getitem__(self, index):
         img_path, pid, camid = self.dataset[index]
         img = read_image(img_path)
-        
+
         if self.transform is not None:
             img = self.transform(img)
-        
+
         return img, pid, camid, img_path
 
 
@@ -76,7 +95,7 @@ class VideoDataset(Dataset):
             indices = np.random.choice(indices, size=self.seq_len, replace=replace)
             # sort indices to keep temporal order (comment it to be order-agnostic)
             indices = np.sort(indices)
-        
+
         elif self.sample_method == 'evenly':
             """
             Evenly sample seq_len items from num items.
@@ -91,14 +110,14 @@ class VideoDataset(Dataset):
                 num_pads = self.seq_len - num
                 indices = np.concatenate([indices, np.ones(num_pads).astype(np.int32)*(num-1)])
             assert len(indices) == self.seq_len
-        
+
         elif self.sample_method == 'all':
             """
             Sample all items, seq_len is useless now and batch_size needs
             to be set to 1.
             """
             indices = np.arange(num)
-        
+
         else:
             raise ValueError("Unknown sample method: {}. Expected one of {}".format(self.sample_method, self._sample_methods))
 

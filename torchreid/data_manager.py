@@ -3,7 +3,7 @@ from __future__ import print_function
 
 from torch.utils.data import DataLoader
 
-from .dataset_loader import ImageDataset, VideoDataset
+from .dataset_loader import ImageDataset, VideoDataset, MultiScaleImageDataset
 from .datasets import init_imgreid_dataset, init_vidreid_dataset
 from .transforms import build_transforms
 from .samplers import RandomIdentitySampler
@@ -19,11 +19,12 @@ class BaseDataManager(object):
     def num_train_cams(self):
         return self._num_train_cams
 
-    def return_dataloaders(self):
+    def return_dataloaders(self, scale=None):
         """
         Return trainloader and testloader dictionary
         """
         return self.trainloader, self.testloader_dict
+
 
     def return_testdataset_by_name(self, name):
         """
@@ -52,7 +53,8 @@ class ImageDataManager(BaseDataManager):
                  num_instances=4, # number of instances per identity (for RandomIdentitySampler)
                  cuhk03_labeled=False, # use cuhk03's labeled or detected images
                  cuhk03_classic_split=False, # use cuhk03's classic split or 767/700 split
-                 aic19_manual_labels=False
+                 aic19_manual_labels=False,
+                 scales=None
                  ):
         super(ImageDataManager, self).__init__()
         self.use_gpu = use_gpu
@@ -72,8 +74,13 @@ class ImageDataManager(BaseDataManager):
         self.aic19_manual_labels = aic19_manual_labels
 
         # Build train and test transform functions
-        transform_train = build_transforms(self.height, self.width, is_train=True)
-        transform_test = build_transforms(self.height, self.width, is_train=False)
+        if scales is None:
+            transform_train = build_transforms(self.height, self.width, is_train=True)
+            transform_test = build_transforms(self.height, self.width, is_train=False)
+        else:
+            transform_train = [build_transforms(scale, scale, is_train=True) for scale in scales]
+            transform_test = [build_transforms(scale, scale, is_train=False) for scale in scales]
+
 
         print("=> Initializing TRAIN (source) datasets")
         self.train = []
@@ -94,9 +101,14 @@ class ImageDataManager(BaseDataManager):
             self._num_train_pids += dataset.num_train_pids
             self._num_train_cams += dataset.num_train_cams
 
+        if scales is None:
+            imageDataset = ImageDataset(self.train, transform=transform_train)
+        else:
+            imageDataset = MultiScaleImageDataset(self.train, transforms=transform_train)
+
         if self.train_sampler == 'RandomIdentitySampler':
             self.trainloader = DataLoader(
-                ImageDataset(self.train, transform=transform_train),
+                imageDataset,
                 sampler=RandomIdentitySampler(self.train, self.train_batch_size, self.num_instances),
                 batch_size=self.train_batch_size, shuffle=False, num_workers=self.workers,
                 pin_memory=self.use_gpu, drop_last=True
@@ -104,7 +116,7 @@ class ImageDataManager(BaseDataManager):
 
         else:
             self.trainloader = DataLoader(
-                ImageDataset(self.train, transform=transform_train),
+                imageDataset,
                 batch_size=self.train_batch_size, shuffle=True, num_workers=self.workers,
                 pin_memory=self.use_gpu, drop_last=True
             )
@@ -119,14 +131,21 @@ class ImageDataManager(BaseDataManager):
                 cuhk03_classic_split=self.cuhk03_classic_split, aic19_manual_labels=self.aic19_manual_labels
             )
 
+            if scales is None:
+                queryImageDataset =   ImageDataset(dataset.query, transform=transform_test)
+                galleryImageDataset = ImageDataset(dataset.gallery, transform=transform_test)
+            else:
+                queryImageDataset =   MultiScaleImageDataset(dataset.query, transforms=transform_test)
+                galleryImageDataset = MultiScaleImageDataset(dataset.gallery, transforms=transform_test)
+
             self.testloader_dict[name]['query'] = DataLoader(
-                ImageDataset(dataset.query, transform=transform_test),
+                queryImageDataset,
                 batch_size=self.test_batch_size, shuffle=False, num_workers=self.workers,
                 pin_memory=self.use_gpu, drop_last=False
             )
 
             self.testloader_dict[name]['gallery'] = DataLoader(
-                ImageDataset(dataset.gallery, transform=transform_test),
+                galleryImageDataset,
                 batch_size=self.test_batch_size, shuffle=False, num_workers=self.workers,
                 pin_memory=self.use_gpu, drop_last=False
             )
