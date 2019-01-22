@@ -219,7 +219,7 @@ class MobileNetV2wS(nn.Module):
 
         # average pooling layer
         x = self.avgpool(x)
-        f = self.dropout(x)
+        # x = self.dropout(x)
 
         # flatten for input to fully-connected layer
         v = x.view(x.size(0), -1)
