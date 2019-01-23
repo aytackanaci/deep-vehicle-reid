@@ -29,12 +29,16 @@ from torchreid.optimizers import init_optimizer
 
 def exp_name(cfg):
     name = [
-        '_'.join(cfg.target_names),
-        # cfg.exp_prefix,
+        'e_' + cfg.prefix,
+        'S_' + '-'.join(cfg.source_names),
+        'T_' + '-'.join(cfg.target_names),
         cfg.arch,
-        'ep_warmup' + str(cfg.fixbase_epoch),
+        'E',
+        '' if cfg.resume == '' else 'r',
+        '' if cfg.fixbase_epoch is not 0 else 'warmup' + str(cfg.fixbase_epoch),
         str(cfg.stepsize),
-        'ep_max' + str(cfg.max_epoch),
+        'm' + str(cfg.max_epoch),
+        'P',
         'b' + str(cfg.train_batch_size),
         cfg.optim,
         'lr' + str(cfg.lr),
@@ -46,7 +50,7 @@ def exp_name(cfg):
 # read config
 parser = argument_parser()
 args = parser.parse_args()
-args.start_eval = args.max_epoch - 30
+args.start_eval = args.max_epoch - 20
 args.fixbase_epoch = 0
 args.save_dir = exp_name(args)
 args.arch = 'dpfl'

@@ -25,6 +25,8 @@ def argument_parser():
                         help="split index (note: 0-based)")
     parser.add_argument('--train-sampler', type=str, default='',
                         help="sampler for trainloader")
+    parser.add_argument('--prefix', type=str, default='',
+                        help="Prefix for experiment")
 
     # ************************************************************
     # Video datasets
@@ -129,7 +131,7 @@ def argument_parser():
                         help="load pretrained weights but ignore layers that don't match in size")
     parser.add_argument('--evaluate', action='store_true',
                         help="evaluate only")
-    parser.add_argument('--eval-freq', type=int, default=2,
+    parser.add_argument('--eval-freq', type=int, default=5,
                         help="evaluation frequency (set to -1 to test only in the end)")
     parser.add_argument('--start-eval', type=int, default=0,
                         help="start to evaluate after a specific epoch")
@@ -137,7 +139,7 @@ def argument_parser():
     # ************************************************************
     # Miscs
     # ************************************************************
-    parser.add_argument('--print-freq', type=int, default=20,
+    parser.add_argument('--print-freq', type=int, default=100,
                         help="print frequency")
     parser.add_argument('--seed', type=int, default=1,
                         help="manual seed")

@@ -28,12 +28,16 @@ from torchreid.optimizers import init_optimizer
 
 def exp_name(cfg):
     name = [
-        '_'.join(cfg.target_names),
-        # cfg.exp_prefix,
+        'e_' + cfg.prefix,
+        'S_' + '-'.join(cfg.source_names),
+        'T_' + '-'.join(cfg.target_names),
         cfg.arch,
-        'ep_warmup' + str(cfg.fixbase_epoch),
+        'E',
+        '' if cfg.resume == '' else 'r',
+        '' if cfg.fixbase_epoch is not 0 else 'warmup' + str(cfg.fixbase_epoch),
         str(cfg.stepsize),
-        'ep_max' + str(cfg.max_epoch),
+        'm' + str(cfg.max_epoch),
+        'P',
         'b' + str(cfg.train_batch_size),
         cfg.optim,
         'lr' + str(cfg.lr),
@@ -45,7 +49,7 @@ def exp_name(cfg):
 # read config
 parser = argument_parser()
 args = parser.parse_args()
-args.start_eval = args.max_epoch - 10
+args.start_eval = args.max_epoch - 20
 args.save_dir = exp_name(args)
 
 
@@ -74,11 +78,13 @@ def main():
     print("Initializing model: {}".format(args.arch))
     model = models.init_model(name=args.arch, num_classes=dm.num_train_pids, input_size=args.width, loss={'xent'}, use_gpu=use_gpu)
     print("Model size: {:.3f} M".format(count_num_param(model)))
+    print(model)
+    # sys.exit(0)
 
     criterion = CrossEntropyLoss(num_classes=dm.num_train_pids, use_gpu=use_gpu, label_smooth=args.label_smooth)
     optimizer = init_optimizer(model.parameters(), **optimizer_kwargs(args))
-    # scheduler = lr_scheduler.MultiStepLR(optimizer, milestones=args.stepsize, gamma=args.gamma)
-    scheduler = lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.1, patience=3, verbose=True, threshold=1e-04)
+    scheduler = lr_scheduler.MultiStepLR(optimizer, milestones=args.stepsize, gamma=args.gamma)
+    # scheduler = lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.1, patience=3, verbose=True, threshold=1e-04)
 
     if args.load_weights and check_isfile(args.load_weights): # load pretrained weights but ignore layers that don't match in size
         checkpoint = torch.load(args.load_weights)
@@ -89,7 +95,6 @@ def main():
         model.load_state_dict(model_dict)
         print("Loaded pretrained weights from '{}'".format(args.load_weights))
 
-    # sys.exit(0)
     if args.resume and check_isfile(args.resume):
         checkpoint = torch.load(args.resume)
         model.load_state_dict(checkpoint['state_dict'])
