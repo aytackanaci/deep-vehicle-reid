@@ -7,7 +7,6 @@ import time
 import datetime
 import os.path as osp
 import numpy as np
-import copy
 
 import torch
 import torch.nn as nn
@@ -73,7 +72,7 @@ def main():
     else:
         print("Currently using CPU, however, GPU is highly recommended")
 
-    print("Initializing Large data manager")
+    print("Initializing MultiScale data manager")
     dm = ImageDataManager(use_gpu, scales=[224,160], **image_dataset_kwargs(args))
     trainloader, testloader_dict = dm.return_dataloaders()
 
@@ -114,14 +113,9 @@ def main():
             print("Evaluating {} ...".format(name))
             queryloader = testloader_dict[name]['query']
             galleryloader = testloader_dict[name]['gallery']
-            distmat = test(model, queryloader, galleryloader, use_gpu, return_distmat=True)
+            test_set = dm.return_testdataset_by_name(name)
+            rank1, mAP = test(model, test_set, name, queryloader, galleryloader, use_gpu, visualize=args.visualize_ranks)
 
-            if args.visualize_ranks:
-                visualize_ranked_results(
-                    distmat, dm.return_testdataset_by_name(name),
-                    save_dir=osp.join(args.save_dir, 'ranked_results', name),
-                    topk=100
-                )
         return
 
     start_time = time.time()
@@ -159,7 +153,14 @@ def main():
                 print("Evaluating {} ...".format(name))
                 queryloader = testloader_dict[name]['query']
                 galleryloader = testloader_dict[name]['gallery']
-                rank1, mAP = test(model, queryloader, galleryloader, use_gpu)
+
+                test_set = dm.return_testdataset_by_name(name)
+
+                if epoch+1 == args.max_epoch:
+                    rank1, mAP = test(model, test_set, name, queryloader, galleryloader, use_gpu, visualize=True)
+                else:
+                    rank1, mAP = test(model, test_set, name, queryloader, galleryloader, use_gpu)
+
                 ranklogger.write(name, epoch + 1, rank1)
                 maplogger.write(name, epoch + 1, mAP)
 
@@ -246,7 +247,7 @@ def train(epoch, model, criterion, optimizer, trainloader, use_gpu, fixbase=Fals
     return losses.avg, precisions.avg
 
 
-def test(model, queryloader, galleryloader, use_gpu, ranks=[1, 5, 10, 20], return_distmat=False):
+def test(model, test_set, name, queryloader, galleryloader, use_gpu, ranks=[1, 5, 10, 20], visualize=False):
     batch_time = AverageMeter()
 
     model.eval()
@@ -298,7 +299,14 @@ def test(model, queryloader, galleryloader, use_gpu, ranks=[1, 5, 10, 20], retur
     distmat = distmat.numpy()
 
     print("Computing CMC and mAP")
-    cmc, mAP = evaluate(distmat, q_pids, g_pids, q_camids, g_camids, use_metric_cuhk03=args.use_metric_cuhk03)
+    cmc, mAP, all_AP = evaluate(distmat, q_pids, g_pids, q_camids, g_camids, use_metric_cuhk03=args.use_metric_cuhk03)
+
+    if visualize:
+        visualize_ranked_results(
+            distmat, all_AP, test_set, name,
+            save_path=args.save_dir,
+            topk=100
+        )
 
     print("Results ----------")
     print("mAP: {:.1%}".format(mAP))
@@ -307,8 +315,6 @@ def test(model, queryloader, galleryloader, use_gpu, ranks=[1, 5, 10, 20], retur
         print("Rank-{:<3}: {:.1%}".format(r, cmc[r-1]))
     print("------------------")
 
-    if return_distmat:
-        return distmat
     return cmc[0], mAP
 
 

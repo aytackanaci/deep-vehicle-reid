@@ -74,7 +74,6 @@ def main():
     dm = ImageDataManager(use_gpu, **image_dataset_kwargs(args))
     trainloader, testloader_dict = dm.return_dataloaders()
 
-
     print("Initializing model: {}".format(args.arch))
     model = models.init_model(name=args.arch, num_classes=dm.num_train_pids, input_size=args.width, loss={'xent'}, use_gpu=use_gpu)
     print("Model size: {:.3f} M".format(count_num_param(model)))
@@ -112,20 +111,17 @@ def main():
             print("Evaluating {} ...".format(name))
             queryloader = testloader_dict[name]['query']
             galleryloader = testloader_dict[name]['gallery']
-            distmat = test(model, queryloader, galleryloader, use_gpu, return_distmat=True)
+            test_set = dm.return_testdataset_by_name(name)
+            rank1, mAP = test(model, test_set, name, queryloader, galleryloader, use_gpu, visualize=args.visualize_ranks)
 
-            if args.visualize_ranks:
-                visualize_ranked_results(
-                    distmat, dm.return_testdataset_by_name(name),
-                    save_dir=osp.join(args.save_dir, 'ranked_results', name),
-                    topk=100
-                )
         return
 
     start_time = time.time()
     ranklogger = RankLogger(args.source_names, args.target_names)
+    maplogger = RankLogger(args.source_names, args.target_names)
     train_time = 0
     print("=> Start training")
+
 
     if args.fixbase_epoch > 0:
         print("Train {} for {} epochs while keeping other layers frozen".format(args.open_layers, args.fixbase_epoch))
@@ -146,7 +142,7 @@ def main():
         print('Epoch: [{:02d}] [Average Loss:] {:.4f}\t [Average Prec.:] {:.2%}'.format(epoch+1, loss, prec1))
         train_time += round(time.time() - start_train_time)
 
-        scheduler.step(loss)
+        scheduler.step()
 
         if (epoch + 1) > args.start_eval and args.eval_freq > 0 and (epoch + 1) % args.eval_freq == 0 or (epoch + 1) == args.max_epoch:
             print("=> Test")
@@ -155,8 +151,16 @@ def main():
                 print("Evaluating {} ...".format(name))
                 queryloader = testloader_dict[name]['query']
                 galleryloader = testloader_dict[name]['gallery']
-                rank1 = test(model, queryloader, galleryloader, use_gpu)
+
+                test_set = dm.return_testdataset_by_name(name)
+
+                if epoch+1 == args.max_epoch:
+                    rank1, mAP = test(model, test_set, name, queryloader, galleryloader, use_gpu, visualize=True)
+                else:
+                    rank1, mAP = test(model, test_set, name, queryloader, galleryloader, use_gpu)
+
                 ranklogger.write(name, epoch + 1, rank1)
+                maplogger.write(name, epoch + 1, mAP)
 
             if use_gpu:
                 state_dict = model.module.state_dict()
@@ -182,6 +186,7 @@ def main():
     train_time = str(datetime.timedelta(seconds=train_time))
     print("Finished. Total elapsed time (h:m:s): {}. Training time (h:m:s): {}.".format(elapsed, train_time))
     ranklogger.show_summary()
+    maplogger.show_summary()
 
 
 def train(epoch, model, criterion, optimizer, trainloader, use_gpu, fixbase=False):
@@ -236,7 +241,7 @@ def train(epoch, model, criterion, optimizer, trainloader, use_gpu, fixbase=Fals
     return losses.avg, precisions.avg
 
 
-def test(model, queryloader, galleryloader, use_gpu, ranks=[1, 5, 10, 20], return_distmat=False):
+def test(model, test_set, name, queryloader, galleryloader, use_gpu, ranks=[1, 5, 10, 20], visualize=False):
     batch_time = AverageMeter()
 
     model.eval()
@@ -288,7 +293,14 @@ def test(model, queryloader, galleryloader, use_gpu, ranks=[1, 5, 10, 20], retur
     distmat = distmat.numpy()
 
     print("Computing CMC and mAP")
-    cmc, mAP = evaluate(distmat, q_pids, g_pids, q_camids, g_camids, use_metric_cuhk03=args.use_metric_cuhk03)
+    cmc, mAP, all_AP = evaluate(distmat, q_pids, g_pids, q_camids, g_camids, use_metric_cuhk03=args.use_metric_cuhk03)
+
+    if visualize:
+        visualize_ranked_results(
+            distmat, all_AP, test_set, name,
+            save_path=args.save_dir,
+            topk=100
+        )
 
     print("Results ----------")
     print("mAP: {:.1%}".format(mAP))
@@ -297,9 +309,7 @@ def test(model, queryloader, galleryloader, use_gpu, ranks=[1, 5, 10, 20], retur
         print("Rank-{:<3}: {:.1%}".format(r, cmc[r-1]))
     print("------------------")
 
-    if return_distmat:
-        return distmat
-    return cmc[0]
+    return cmc[0], mAP
 
 
 if __name__ == '__main__':
