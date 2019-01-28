@@ -12,8 +12,8 @@ from torch.nn import init
 __all__ = ['mobilenetv2ws']
 
 model_urls = {
-        '0.5_160': '/home/hak32/src/MobileNetV2-pytorch/results/mobilenet_v2_0.5_160/model_best.pth.tar',
-        '1.0_224': '/home/hak32/src/MobileNetV2-pytorch/results/mobilenet_v2_1.0_224/model_best.pth.tar',
+        '0.5_160': '/homes/hak32/src/MobileNetV2-pytorch/results/mobilenet_v2_0.5_160/model_best.pth.tar',
+        '1.0_224': '/homes/hak32/src/MobileNetV2-pytorch/results/mobilenet_v2_1.0_224/model_best.pth.tar',
 }
 
 

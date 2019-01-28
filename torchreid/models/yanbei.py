@@ -20,12 +20,14 @@ class DPFL(nn.Module):
     def __init__(self, num_classes,
                  loss,
                  scales=[1.0, 0.5],
+                 dropout_p=0.001,
                  **kwargs):
 
         super(DPFL, self).__init__()
 
         self.loss = loss
         self.num_classes = num_classes
+        self.dropout_p = dropout_p
 
         #scale 1.0
 
@@ -44,14 +46,22 @@ class DPFL(nn.Module):
         self.scale10.feature_extract_mode = True
         self.scale05.feature_extract_mode = True
 
+        self.dropout_small = nn.Dropout(p=dropout_p, inplace=True)
+        self.dropout_large = nn.Dropout(p=dropout_p, inplace=True)
+        self.dropout_consensus = nn.Dropout(p=dropout_p, inplace=True)
+
 
         self.fc10 = nn.Linear(self.scale10.last_conv_out_ch, self.num_classes)
         self.fc05 = nn.Linear(self.scale05.last_conv_out_ch, self.num_classes)
 
-        self.fc_consensus = self._construct_fc_layer(
-                [self.num_classes],
+        self.fc_consensus = nn.Linear(
                 self.scale10.last_conv_out_ch + self.scale05.last_conv_out_ch,
-                dropout_p=0.2)
+                self.num_classes)
+
+        # self.fc_consensus = self._construct_fc_layer(
+        #         [self.num_classes],
+        #         self.scale10.last_conv_out_ch + self.scale05.last_conv_out_ch,
+        #         dropout_p=0.2)
 
         self.init_params()
 
@@ -102,10 +112,14 @@ class DPFL(nn.Module):
         f10 = self.scale10(x10)
         f05 = self.scale05(x05)
 
+        f10 = self.dropout_large(f10)
+        f05 = self.dropout_small(f05)
+
         y10 = self.fc10(f10)
         y05 = self.fc05(f05)
 
         f_fusion = torch.cat([f10, f05], 1)
+        f_fusion = self.dropout_consensus(f_fusion)
 
         if not self.training:
             return f_fusion
