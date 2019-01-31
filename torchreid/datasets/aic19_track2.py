@@ -20,18 +20,9 @@ from .bases import BaseImageDataset
 
 
 class Aic19Track2(BaseImageDataset):
-    """
-    AIC 2019 Track2 (Re-ID)
+    ''' AIC 2019 Track2 (Re-ID)
+    '''
 
-    Reference:
-    Zheng et al. Scalable Person Re-identification: A Benchmark. ICCV 2015.
-
-    URL: http://www.liangzheng.org/Project/project_reid.html
-
-    Dataset statistics:
-    # identities: 666
-    # images: 12936 (train) + 3368 (query) + 15913 (gallery)
-    """
     dataset_dir = 'aic19-track2-reid'
 
     def __init__(self, root='data', verbose=True, aic19_manual_labels=False, val=None, **kwargs):
@@ -64,9 +55,6 @@ class Aic19Track2(BaseImageDataset):
             query = self._process_dir(self.query_dir, 0, relabel=False)
             gallery = self._process_dir(self.gallery_dir, 1, relabel=False)
 
-        if verbose:
-            print("=> Aic19_track2 loaded")
-            self.print_dataset_statistics(train, query, gallery)
 
         self.train = train
         self.query = query
@@ -80,10 +68,14 @@ class Aic19Track2(BaseImageDataset):
         self.num_query_pids, self.num_query_imgs, self.num_query_cams = self.get_imagedata_info(self.query)
         self.num_gallery_pids, self.num_gallery_imgs, self.num_gallery_cams = self.get_imagedata_info(self.gallery)
 
+        if verbose:
+            print("=> Aic19_track2 loaded")
+            self.print_dataset_statistics(train, query, gallery)
+
     def _read_csv(self, path):
         with open(path, 'r') as file:
             lines = file.readlines()
-            lines = [t.strip().split(' ') for t in lines]
+            lines = [l.strip().split(' ') for l in lines]
 
         return lines
 
@@ -140,14 +132,13 @@ class Aic19Track2(BaseImageDataset):
                 query.append( (path, idx+num_val, camid))
 
             for camid, paths in enumerate(identities[pid]):
-                for im_path in paths:
-                    if camid is not q_cam:
+                if camid is not q_cam:
+                    for im_path in paths:
                         gallery.append( (im_path, idx+num_val, camid))
 
         self.train = train
         self.query = query
         self.gallery = gallery
-        self.print_dataset_statistics(train,query,gallery)
 
     def _process_manual_labels(self, gallery_dir, query_dir, tracks_path, gallery_csv_path, query_csv_path):
 
@@ -167,6 +158,10 @@ class Aic19Track2(BaseImageDataset):
                         gallery[int(im)-1][2])
 
         labelled_query = filter(lambda x: len(x) == 2, query_ids)
+
+        # sort query images by ID
+        labelled_query.sort(key=lambda x: x[1])
+
         query = [(osp.join(self.query_dir, query), num_gallery_images + int(man_idx), 0) for query, man_idx in labelled_query]
 
         return query, gallery
