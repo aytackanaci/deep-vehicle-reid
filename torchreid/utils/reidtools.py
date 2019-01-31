@@ -37,61 +37,62 @@ def visualize_ranked_results(distmat, all_AP, dataset, dataset_name, save_path, 
 
     # HELPERS
     def _printHtml(querys, ranks, data_root, f):
-       header = '''
-       <html>
-           <head>
-               <style>
-                   img { width: 112px; height: 112px; border: 3px solid black;}
-                   img.hit { border: 4px solid green; }
-                   img.not { border: 4px solid red; }
-               </style>
-           </head>
-           <body>
-       '''
+        header = '''
+        <html>
+            <head>
+                <style>
+                    img { width: 112px; height: 112px; border: 3px solid black;}
+                    img.hit { border: 4px solid green; }
+                    img.not { border: 4px solid red; }
+                    td { text-align: right;}
+                </style>
+            </head>
+            <body>
+        '''
 
-       table_header = '''
-        <table border="1" class="dataframe">
-          <thead>
-            <tr style="text-align: left;">
-              <th>ap</th>
-              <th>query</th>
-              <th>ranks</th>
-            </tr>
-          </thead>
+        table_header = '''
+         <table border="1" class="dataframe">
+           <thead>
+             <tr style="text-align: left;">
+               <th>query no</th>
+               <th>ap</th>
+               <th>query</th>
+               <th>ranks</th>
+             </tr>
+           </thead>
 
-       '''
+        '''
 
-       im_template = '<img title="{}" class="{}" src="{}" />'
+        im_template = '<img title="{}" class="{}" src="{}" />'
 
-       footer = '''
-           </body>
-       </html>
-       '''
+        footer = '''
+            </body>
+        </html>
+        '''
 
-       f.write(header)
-       f.write(table_header)
+        f.write(header)
+        f.write(table_header)
+        #write table
+        f.write('<tbody>\n')
+        for i, q in enumerate(query):
+            f.write('<tr>\n')
 
-       #write table
-       f.write('<tbody>\n')
-       for i, q in enumerate(query):
-           f.write('<tr>\n')
+            f.write('<td># {:03d}</td><td>{:.3f}</td>'.format(i,all_AP[i]))
 
-           f.write('<td>{:.3f}</td>'.format(all_AP[i]))
+            f.write('<td>')
+            f.write(im_template.format(q[0], '', q[0]))
+            f.write('</td>\n')
 
-           f.write('<td>')
-           f.write(im_template.format(q[0], '', q[0]))
-           f.write('</td>\n')
+            f.write('<td>')
+            for image, hit in ranks[i]:
+                c = 'hit' if hit else 'not'
+                f.write(im_template.format(image, c, image))
+            f.write('</td>\n')
 
-           f.write('<td>')
-           for image, hit in ranks[i]:
-               c = 'hit' if hit else 'not'
-               f.write(im_template.format(image, c, image))
-           f.write('</td>\n')
+            f.write('</tr>\n')
 
-           f.write('</tr>\n')
-
-       f.write('</tbody>\n')
-       f.write(footer)
+        f.write('</tbody>\n')
+        f.write(footer)
 
     def _cp_img_to(src, dst, rank, prefix):
         """
