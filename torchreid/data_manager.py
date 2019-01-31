@@ -44,6 +44,7 @@ class ImageDataManager(BaseDataManager):
                  target_names,
                  root,
                  split_id=0,
+                 val=None,
                  height=256,
                  width=128,
                  train_batch_size=32,
@@ -62,6 +63,7 @@ class ImageDataManager(BaseDataManager):
         self.target_names = target_names
         self.root = root
         self.split_id = split_id
+        self.val = val
         self.height = height
         self.width = width
         self.train_batch_size = train_batch_size
@@ -90,7 +92,7 @@ class ImageDataManager(BaseDataManager):
         for name in self.source_names:
             dataset = init_imgreid_dataset(
                 root=self.root, name=name, split_id=self.split_id, cuhk03_labeled=self.cuhk03_labeled,
-                cuhk03_classic_split=self.cuhk03_classic_split
+                cuhk03_classic_split=self.cuhk03_classic_split, val=self.val,
             )
 
             for img_path, pid, camid in dataset.train:
@@ -128,7 +130,7 @@ class ImageDataManager(BaseDataManager):
         for name in self.target_names:
             dataset = init_imgreid_dataset(
                 root=self.root, name=name, split_id=self.split_id, cuhk03_labeled=self.cuhk03_labeled,
-                cuhk03_classic_split=self.cuhk03_classic_split, aic19_manual_labels=self.aic19_manual_labels
+                cuhk03_classic_split=self.cuhk03_classic_split, aic19_manual_labels=self.aic19_manual_labels, val=self.val,
             )
 
             if scales is None:

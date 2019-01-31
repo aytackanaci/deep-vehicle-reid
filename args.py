@@ -21,6 +21,8 @@ def argument_parser():
                         help="height of an image")
     parser.add_argument('--width', type=int, default=224,
                         help="width of an image")
+    parser.add_argument('--val', default=0.0, type=float,
+                        help="Split Train to Train and Val")
     parser.add_argument('--split-id', type=int, default=0,
                         help="split index (note: 0-based)")
     parser.add_argument('--train-sampler', type=str, default='',
@@ -64,7 +66,7 @@ def argument_parser():
                         help="momentum factor for sgd and rmsprop")
     parser.add_argument('--sgd-dampening', default=0, type=float,
                         help="sgd's dampening for momentum")
-    parser.add_argument('--sgd-nesterov', action='store_true',
+    parser.add_argument('--sgd-nesterov', action='store_true', default=True,
                         help="whether to enable sgd's Nesterov momentum")
     # rmsprop
     parser.add_argument('--rmsprop-alpha', default=0.99, type=float,
@@ -78,7 +80,7 @@ def argument_parser():
     # ************************************************************
     # Training hyperparameters
     # ************************************************************
-    parser.add_argument('--max-epoch', default=50, type=int,
+    parser.add_argument('--max-epoch', default=60, type=int,
                         help="maximum epochs to run")
     parser.add_argument('--start-epoch', default=0, type=int,
                         help="manual epoch number (useful when restart)")
@@ -87,7 +89,7 @@ def argument_parser():
     parser.add_argument('--gamma', default=0.1, type=float,
                         help="learning rate decay")
 
-    parser.add_argument('--train-batch-size', default=128, type=int,
+    parser.add_argument('--train-batch-size', default=16, type=int,
                         help="training batch size")
     parser.add_argument('--test-batch-size', default=100, type=int,
                         help="test batch size")
@@ -179,6 +181,7 @@ def image_dataset_kwargs(parsed_args):
         'cuhk03_labeled': parsed_args.cuhk03_labeled,
         'cuhk03_classic_split': parsed_args.cuhk03_classic_split,
         'aic19_manual_labels': parsed_args.aic19_manual_labels,
+        'val': parsed_args.val,
     }
 
 

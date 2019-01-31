@@ -9,6 +9,7 @@ import sys
 import urllib
 import tarfile
 import zipfile
+from collections import defaultdict
 import os.path as osp
 from scipy.io import loadmat
 import numpy as np
@@ -33,7 +34,7 @@ class Aic19Track2(BaseImageDataset):
     """
     dataset_dir = 'aic19-track2-reid'
 
-    def __init__(self, root='data', verbose=True, aic19_manual_labels=False, **kwargs):
+    def __init__(self, root='data', verbose=True, aic19_manual_labels=False, val=None, **kwargs):
 
         super(Aic19Track2, self).__init__(root)
         self.dataset_dir = osp.join(self.root, self.dataset_dir)
@@ -43,6 +44,7 @@ class Aic19Track2(BaseImageDataset):
 
         self.train_label_csv = osp.join(self.dataset_dir, 'train_label_xml.csv')
 
+        self.train_tracks_csv = osp.join(self.dataset_dir,  'train_track_id.txt')
         self.gallery_tracks_csv = osp.join(self.dataset_dir, 'test_track_id.txt')
         self.gallery_manual_id_csv = osp.join(self.dataset_dir, 'test_track_manual_ids.txt')
         self.query_manual_csv = osp.join(self.dataset_dir, 'name_query_manual.txt')
@@ -70,9 +72,20 @@ class Aic19Track2(BaseImageDataset):
         self.query = query
         self.gallery = gallery
 
+        if 0.0 < val < 1.0:
+            # self.train_tracks = _read_csv(self.train_tracks_csv)
+            self._split_train(val=val)
+
         self.num_train_pids, self.num_train_imgs, self.num_train_cams = self.get_imagedata_info(self.train)
         self.num_query_pids, self.num_query_imgs, self.num_query_cams = self.get_imagedata_info(self.query)
         self.num_gallery_pids, self.num_gallery_imgs, self.num_gallery_cams = self.get_imagedata_info(self.gallery)
+
+    def _read_csv(self, path):
+        with open(path, 'r') as file:
+            lines = file.readlines()
+            lines = [t.strip().split(' ') for t in lines]
+
+        return lines
 
     def _check_before_run(self):
         """Check if all files are available before going deeper"""
@@ -85,17 +98,62 @@ class Aic19Track2(BaseImageDataset):
         if not osp.exists(self.gallery_dir):
             raise RuntimeError("'{}' is not available".format(self.gallery_dir))
 
+    def _split_train(self, val=0.3):
+        print('Splitting Train')
+        import random
+        train_pids = set()
+        num_pids, num_imgs, num_cams = self.get_imagedata_info(self.train)
+        identities = [[[] for _ in range(num_cams+6)] for _ in range(num_pids)]
+
+        for im_path, pid, camid in self.train:
+            identities[pid][camid].append(im_path)
+            train_pids.add(pid)
+
+        trainval_pids = list(train_pids)
+        random.seed(1337)
+        random.shuffle(trainval_pids)
+        num_val = int(round(num_pids * val))
+
+        train_pids = sorted(trainval_pids[:-num_val])
+        val_pids = sorted(trainval_pids[-num_val:])
+
+        train = []
+        for idx, pid in enumerate(train_pids):
+            for camid, paths in enumerate(identities[pid]):
+                for im_path in paths:
+                    train.append( (im_path, idx, camid) )
+
+
+        query, gallery = [], []
+        for idx, pid in enumerate(val_pids):
+
+            q_cam = None
+            cams = []
+            for camid, paths in enumerate(identities[pid]):
+                # print(pid, camid, paths)
+                if len(paths) != 0:
+                    cams.append(camid)
+
+            q_cam = random.choice(cams)
+
+            for path in identities[pid][q_cam]:
+                query.append( (path, idx+num_val, camid))
+
+            for camid, paths in enumerate(identities[pid]):
+                for im_path in paths:
+                    if camid is not q_cam:
+                        gallery.append( (im_path, idx+num_val, camid))
+
+        self.train = train
+        self.query = query
+        self.gallery = gallery
+        self.print_dataset_statistics(train,query,gallery)
+
     def _process_manual_labels(self, gallery_dir, query_dir, tracks_path, gallery_csv_path, query_csv_path):
-        def read_csv(path):
-            with open(path, 'r') as file:
-                lines = file.readlines()
-                lines = [t.strip().split(' ') for t in lines]
 
-            return lines
-
-        tracks = read_csv(tracks_path)
-        gallery_ids = read_csv(gallery_csv_path)
-        query_ids = read_csv(query_csv_path)
+        tracks = self._read_csv(tracks_path)
+        gallery_ids = self._read_csv(gallery_csv_path)
+        query_ids = self._read_csv(query_csv_path)
 
         gallery = self._process_dir(gallery_dir, 1)
         num_gallery_images = len(gallery)

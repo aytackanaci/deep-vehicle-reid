@@ -49,10 +49,10 @@ def exp_name(cfg):
 # read config
 parser = argument_parser()
 args = parser.parse_args()
-args.start_eval = args.max_epoch - 20
+args.start_eval = args.max_epoch - 20-1
 args.fixbase_epoch = 0
-args.save_dir = exp_name(args)
 args.arch = 'dpfl'
+args.save_dir = exp_name(args)
 
 
 def main():
@@ -75,12 +75,12 @@ def main():
     print("Initializing MultiScale data manager")
     dm = ImageDataManager(use_gpu, scales=[224,160], **image_dataset_kwargs(args))
     trainloader, testloader_dict = dm.return_dataloaders()
+    # sys.exit(0)
 
     print("Initializing model: {}".format(args.arch))
     model = models.init_model(name=args.arch, num_classes=dm.num_train_pids, input_size=args.width, loss={'xent'}, use_gpu=use_gpu)
     print("Model size: {:.3f} M".format(count_num_param(model)))
     print(model)
-    # sys.exit(0)
 
     criterion = CrossEntropyLoss(num_classes=dm.num_train_pids, use_gpu=use_gpu, label_smooth=args.label_smooth)
     optimizer = init_optimizer(model.parameters(), **optimizer_kwargs(args))
