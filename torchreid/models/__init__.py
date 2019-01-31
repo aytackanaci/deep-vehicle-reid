@@ -19,7 +19,7 @@ from .mudeep import *
 from .hacnn import *
 from .pcb import *
 from .mlfn import *
-from .yanbei import *
+from .dpfl import *
 
 
 __model_factory = {

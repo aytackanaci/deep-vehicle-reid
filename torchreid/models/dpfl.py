@@ -128,6 +128,8 @@ class DPFL(nn.Module):
 
         if self.loss == {'xent'}:
             return y10, y05, y_concensus
+        elif self.loss == {'xent', 'htri'}:
+            return y10, y05, y_concensus, f_fusion
         else:
             raise KeyError("Unsupported loss: {}".format(self.loss))
 
