@@ -34,7 +34,7 @@ def exp_name(cfg):
         cfg.arch,
         'E',
         '' if cfg.resume == '' else 'r',
-        '' if cfg.fixbase_epoch is not 0 else 'warmup' + str(cfg.fixbase_epoch),
+        '' if cfg.fixbase_epoch is 0 else 'warmup' + str(cfg.fixbase_epoch),
         str(cfg.stepsize),
         'm' + str(cfg.max_epoch),
         'P',

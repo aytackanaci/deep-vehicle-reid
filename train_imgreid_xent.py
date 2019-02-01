@@ -34,7 +34,7 @@ def exp_name(cfg):
         cfg.arch,
         'E',
         '' if cfg.resume == '' else 'r',
-        '' if cfg.fixbase_epoch is not 0 else 'warmup' + str(cfg.fixbase_epoch),
+        '' if cfg.fixbase_epoch is 0 else 'warmup' + str(cfg.fixbase_epoch),
         str(cfg.stepsize),
         'm' + str(cfg.max_epoch),
         'P',
@@ -49,7 +49,7 @@ def exp_name(cfg):
 # read config
 parser = argument_parser()
 args = parser.parse_args()
-args.start_eval = args.max_epoch - 20
+args.start_eval = args.max_epoch - 20 -1
 args.save_dir = exp_name(args)
 
 
