@@ -7,9 +7,11 @@ import time
 import datetime
 import os.path as osp
 import numpy as np
+import pdb
 
 import torch
 import torch.nn as nn
+import torch.nn.functional as F
 import torch.backends.cudnn as cudnn
 from torch.optim import lr_scheduler
 
@@ -212,19 +214,28 @@ def train(epoch, model, criterion, optimizer, trainloader, use_gpu, fixbase=Fals
             img1, img2, pids = img1.cuda(), img2.cuda(), pids.cuda()
 
         y10, y05, y_consensus = model(img1, img2)
+        consensus_prob = F.softmax(y_consensus, dim=1)
 
         loss10 = criterion(y10, pids)
         loss05 = criterion(y05, pids)
         loss_consensus = criterion(y_consensus, pids)
+
+        loss_consensus_large = criterion(y10, consensus_prob, one_hot=True)
+        loss_consensus_small = criterion(y05, consensus_prob, one_hot=True)
+
+        total_loss_large = loss10 + loss_consensus_large #+
+        total_loss_small = loss05 + loss_consensus_small #+
+        total_loss_joint = loss_consensus #+
+
 
         prec, = accuracy(y_consensus.data, pids.data)
         prec1 = prec[0]  # get top 1
 
         optimizer.zero_grad()
 
-        loss10.backward(retain_graph=True)
-        loss05.backward(retain_graph=True)
-        loss_consensus.backward()
+        total_loss_large.backward(retain_graph=True)
+        total_loss_small.backward(retain_graph=True)
+        total_loss_joint.backward()
 
         optimizer.step()
 
