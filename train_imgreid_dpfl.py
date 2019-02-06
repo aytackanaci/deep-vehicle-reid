@@ -127,7 +127,7 @@ def main():
 
 
     # Tensorboard
-    writer = SummaryWriter(log_dir=osp.join(args.save_dir, 'tensorboard'))
+    writer = SummaryWriter(log_dir=osp.join('runs', 'tensorboard'))
     print("=> Start training")
 
 
@@ -151,7 +151,7 @@ def main():
 
     for epoch in range(args.start_epoch, args.max_epoch):
         start_train_time = time.time()
-        loss, prec1 = train(epoch, model, criterion, optimizer, writer, trainloader, use_gpu)
+        loss, prec1 = train(epoch, model, criterion, optimizer, trainloader, writer, use_gpu)
         writer.add_scalar('train/loss', loss, epoch+1)
         writer.add_scalar('train/prec1', prec1, epoch+1)
         print('Epoch: [{:02d}] [Average Loss:] {:.4f}\t [Average Prec.:] {:.2%}'.format(epoch+1, loss, prec1))

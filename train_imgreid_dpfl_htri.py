@@ -13,6 +13,8 @@ import torch.nn as nn
 import torch.backends.cudnn as cudnn
 from torch.optim import lr_scheduler
 
+from tensorboardX import SummaryWriter
+
 from args import argument_parser, image_dataset_kwargs, optimizer_kwargs
 from torchreid.data_manager import ImageDataManager
 from torchreid import models
@@ -124,6 +126,10 @@ def main():
     ranklogger = RankLogger(args.source_names, args.target_names)
     maplogger = RankLogger(args.source_names, args.target_names)
     train_time = 0
+
+
+    # Tensorboard
+    writer = SummaryWriter(log_dir=osp.join('runs', 'tensorboard'))
     print("=> Start training")
 
 
@@ -133,16 +139,23 @@ def main():
 
         for epoch in range(args.fixbase_epoch):
             start_train_time = time.time()
-            loss, prec1 = train(epoch, model, criterion_xent, criterion_htri, optimizer, trainloader, use_gpu, fixbase=True)
+            loss, prec1 = train(epoch, model, criterion, optimizer, trainloader, writer, use_gpu, fixbase=True)
+            writer.add_scalar('train/loss', loss, epoch+1)
+            writer.add_scalar('train/prec1', prec1, epoch+1)
             print('Epoch: [{:02d}] [Average Loss:] {:.4f}\t [Average Prec.:] {:.2%}'.format(epoch+1, loss, prec1))
             train_time += round(time.time() - start_train_time)
 
         print("Done. All layers are open to train for {} epochs".format(args.max_epoch))
         optimizer.load_state_dict(initial_optim_state)
 
+    args.start_epoch += args.fixbase_epoch
+    args.max_epoch += args.fixbase_epoch
+
     for epoch in range(args.start_epoch, args.max_epoch):
         start_train_time = time.time()
-        loss, prec1 = train(epoch, model, criterion_xent, criterion_htri, optimizer, trainloader, use_gpu)
+        loss, prec1 = train(epoch, model, criterion, optimizer, trainloader, writer, use_gpu)
+        writer.add_scalar('train/loss', loss, epoch+1)
+        writer.add_scalar('train/prec1', prec1, epoch+1)
         print('Epoch: [{:02d}] [Average Loss:] {:.4f}\t [Average Prec.:] {:.2%}'.format(epoch+1, loss, prec1))
         train_time += round(time.time() - start_train_time)
 
@@ -162,6 +175,9 @@ def main():
                     rank1, mAP = test(model, test_set, name, queryloader, galleryloader, use_gpu, visualize=True)
                 else:
                     rank1, mAP = test(model, test_set, name, queryloader, galleryloader, use_gpu)
+
+                writer.add_scalar('test/top1', rank1, epoch+1)
+                writer.add_scalar('test/mAP', mAP, epoch+1)
 
                 ranklogger.write(name, epoch + 1, rank1)
                 maplogger.write(name, epoch + 1, mAP)
@@ -193,11 +209,12 @@ def main():
     maplogger.show_summary()
 
 
-def train(epoch, model, criterion_xent, criterion_htri, optimizer, trainloader, use_gpu, fixbase=False):
+def train(epoch, model, criterion_xent, criterion_htri, optimizer, trainloader, writer, use_gpu, fixbase=False):
     losses = AverageMeter()
     precisions = AverageMeter()
     batch_time = AverageMeter()
     data_time = AverageMeter()
+    epoch_iterations = len(trainloader)
 
     model.train()
 
@@ -223,6 +240,9 @@ def train(epoch, model, criterion_xent, criterion_htri, optimizer, trainloader, 
 
         prec, = accuracy(y_consensus.data, pids.data)
         prec1 = prec[0]  # get top 1
+
+        writer.add_scalar('iter/loss', loss_consensus, epoch*epoch_iterations+batch_idx)
+        writer.add_scalar('iter/prec1', prec1, epoch*epoch_iterations+batch_idx)
 
         optimizer.zero_grad()
 
