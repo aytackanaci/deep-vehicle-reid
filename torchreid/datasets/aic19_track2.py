@@ -23,7 +23,7 @@ class Aic19Track2(BaseImageDataset):
     ''' AIC 2019 Track2 (Re-ID)
     '''
 
-    dataset_dir = 'aic19-track2-reid'
+    dataset_dir = 'track2'
 
     def __init__(self, root='data', verbose=True, aic19_manual_labels=False, val=None, **kwargs):
 
