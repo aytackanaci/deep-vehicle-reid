@@ -3,7 +3,7 @@ from __future__ import print_function
 
 from torch.utils.data import DataLoader
 
-from .dataset_loader import ImageDataset, VideoDataset, MultiScaleImageDataset
+from .dataset_loader import ImageDataset, ImageLandmarksDataset, VideoDataset, MultiScaleImageDataset
 from .datasets import init_imgreid_dataset, init_vidreid_dataset
 from .transforms import build_transforms
 from .samplers import RandomIdentitySampler
@@ -56,7 +56,8 @@ class ImageDataManager(BaseDataManager):
                  cuhk03_classic_split=False, # use cuhk03's classic split or 767/700 split
                  aic19_manual_labels=False,
                  vehicleid_test_size='',
-                 scales=None
+                 scales=None,
+                 landmarks=False
                  ):
         super(ImageDataManager, self).__init__()
         self.use_gpu = use_gpu
@@ -107,6 +108,8 @@ class ImageDataManager(BaseDataManager):
 
         if scales is None:
             imageDataset = ImageDataset(self.train, transform=transform_train)
+        elif landmarks:
+            imageDataset = ImageLandmarksDataset(self.train, transform=transform_train)
         else:
             imageDataset = MultiScaleImageDataset(self.train, transforms=transform_train)
 
@@ -138,6 +141,9 @@ class ImageDataManager(BaseDataManager):
             if scales is None:
                 queryImageDataset =   ImageDataset(dataset.query, transform=transform_test)
                 galleryImageDataset = ImageDataset(dataset.gallery, transform=transform_test)
+            elif landmarks:
+                queryImageDataset =   ImageLandmarksDataset(dataset.query, transforms=transform_test)
+                galleryImageDataset = ImageLandmarksDataset(dataset.gallery, transforms=transform_test)                
             else:
                 queryImageDataset =   MultiScaleImageDataset(dataset.query, transforms=transform_test)
                 galleryImageDataset = MultiScaleImageDataset(dataset.gallery, transforms=transform_test)
