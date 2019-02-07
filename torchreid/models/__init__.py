@@ -58,7 +58,7 @@ __model_factory = {
     'pcb_p4': pcb_p4,
     'mlfn': mlfn,
     'dpfl': dpfl,
-    'mpfl': dpfl,
+    'mpfl': mpfl,
 }
 
 

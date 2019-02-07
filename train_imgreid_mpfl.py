@@ -82,9 +82,10 @@ def main():
     print("Model size: {:.3f} M".format(count_num_param(model)))
     print(model)
 
-    criterion_id = CrossEntropyLoss(num_classes=dm.num_train_pids, use_gpu=use_gpu, label_smooth=args.label_smooth)
-    criterion_orients = CrossEntropyLoss(num_classes=dm.num_orients, use_gpu=use_gpu, label_smooth=args.label_smooth)
-    criterion_landmarks = CrossEntropyLoss(num_classes=dm.num_landmarks, use_gpu=use_gpu, label_smooth=args.label_smooth)
+    criterion = {}
+    criterion['id'] = CrossEntropyLoss(num_classes=dm.num_train_pids, use_gpu=use_gpu, label_smooth=args.label_smooth)
+    criterion['orient'] = CrossEntropyLoss(num_classes=dm.num_orients, use_gpu=use_gpu, label_smooth=args.label_smooth)
+    criterion['landmarks'] = CrossEntropyLoss(num_classes=dm.num_landmarks, use_gpu=use_gpu, label_smooth=args.label_smooth)
     optimizer = init_optimizer(model.parameters(), **optimizer_kwargs(args))
     scheduler = lr_scheduler.MultiStepLR(optimizer, milestones=args.stepsize, gamma=args.gamma)
     # scheduler = lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.1, patience=3, verbose=True, threshold=1e-04)
@@ -207,7 +208,7 @@ def train(epoch, model, criterion, optimizer, trainloader, use_gpu, fixbase=Fals
         open_all_layers(model)
 
     end = time.time()
-    for batch_idx, (img, pids, _, _) in enumerate(trainloader):
+    for batch_idx, (img, pids, _, orients, landmarks, _) in enumerate(trainloader):
         data_time.update(time.time() - end)
 
         if use_gpu:
@@ -215,14 +216,14 @@ def train(epoch, model, criterion, optimizer, trainloader, use_gpu, fixbase=Fals
 
         y_id, y_orient, y_landmarks, y_orient_id, y_landmarks_id, y_consensus = model(img)
 
-        loss_id = criterion(y_id, pids)
-        loss_orients_id = criterion(y_orient_id, pids)
-        loss_landmarks_id = criterion(y_landmarks_id, pids)
+        loss_id = criterion['id'](y_id, pids)
+        loss_orients_id = criterion['id'](y_orient_id, pids)
+        loss_landmarks_id = criterion['id'](y_landmarks_id, pids)
 
-        loss_orients = criterion(y_orients, porients)
-        loss_landmarks = criterion(y_landmarks, plandmarks)
-
-        loss_consensus = criterion(y_consensus, pids)
+        loss_orients = criterion['orient'](y_orients, porients)
+        loss_landmarks = criterion['landmarks'](y_landmarks, plandmarks, one_hot=True)
+        
+        loss_consensus = criterion['id'](y_consensus, pids)
 
         prec, = accuracy(y_consensus.data, pids.data)
         prec1 = prec[0]  # get top 1
@@ -265,7 +266,7 @@ def test(model, test_set, name, queryloader, galleryloader, use_gpu, ranks=[1, 5
 
     with torch.no_grad():
         qf, q_pids, q_camids = [], [], []
-        for batch_idx, (img, pids, orients, landmarks, camids, _) in enumerate(queryloader):
+        for batch_idx, (img, pids, camids, _) in enumerate(queryloader):
             if use_gpu: img = img.cuda()
 
             end = time.time()
@@ -284,11 +285,11 @@ def test(model, test_set, name, queryloader, galleryloader, use_gpu, ranks=[1, 5
 
         gf, g_pids, g_camids = [], [], []
         end = time.time()
-        for batch_idx, ((img1, img2), pids, camids, _) in enumerate(galleryloader):
-            if use_gpu: img1, img2 = img1.cuda(), img2.cuda()
+        for batch_idx, (img, pids, camids, _) in enumerate(galleryloader):
+            if use_gpu: img = img.cuda()
 
             end = time.time()
-            features = model(img1, img2)
+            features = model(img)
             batch_time.update(time.time() - end)
 
             features = features.data.cpu()
