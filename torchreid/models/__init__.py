@@ -21,6 +21,7 @@ from .hacnn import *
 from .pcb import *
 from .mlfn import *
 from .dpfl import *
+from .mult-pose-fl import *
 
 
 __model_factory = {
@@ -57,6 +58,7 @@ __model_factory = {
     'pcb_p4': pcb_p4,
     'mlfn': mlfn,
     'dpfl': dpfl,
+    'mpfl': dpfl,
 }
 
 
