@@ -19,6 +19,14 @@ class BaseDataManager(object):
     def num_train_cams(self):
         return self._num_train_cams
 
+    @property
+    def num_train_orients(self):
+        return self._num_train_orients
+
+    @property
+    def num_train_landmarks(self):
+        return self._num_train_landmarks
+
     def return_dataloaders(self, scale=None):
         """
         Return trainloader and testloader dictionary
@@ -57,7 +65,7 @@ class ImageDataManager(BaseDataManager):
                  aic19_manual_labels=False,
                  vehicleid_test_size='',
                  scales=None,
-                 landmarks=False
+                 keypoints_dir=None
                  ):
         super(ImageDataManager, self).__init__()
         self.use_gpu = use_gpu
@@ -76,7 +84,8 @@ class ImageDataManager(BaseDataManager):
         self.cuhk03_labeled = cuhk03_labeled
         self.cuhk03_classic_split = cuhk03_classic_split
         self.aic19_manual_labels = aic19_manual_labels
-        self.vehicleid_test_size = vehicleid_test_size
+        self.vehicleid_test_size = vehicleid_test_size,
+        self.keypoints_dir = keypoints_dir
 
         # Build train and test transform functions
         if scales is None:
@@ -92,26 +101,31 @@ class ImageDataManager(BaseDataManager):
         self._num_train_pids = 0
         self._num_train_cams = 0
 
+        self._num_train_orients = 1
+        self._num_train_landmarks = 0
+        
         for name in self.source_names:
             dataset = init_imgreid_dataset(
                 root=self.root, name=name, split_id=self.split_id, cuhk03_labeled=self.cuhk03_labeled,
-                cuhk03_classic_split=self.cuhk03_classic_split, val=self.val,
+                cuhk03_classic_split=self.cuhk03_classic_split, val=self.val, keypoints_dir=self.keypoints_dir
             )
 
-            for img_path, pid, camid in dataset.train:
-                pid += self._num_train_pids
-                camid += self._num_train_cams
-                self.train.append((img_path, pid, camid))
+            self.train = dataset.train
 
-            self._num_train_pids += dataset.num_train_pids
-            self._num_train_cams += dataset.num_train_cams
+            self._num_train_pids = dataset.num_train_pids
+            self._num_train_cams = dataset.num_train_cams
 
-        if scales is None:
-            imageDataset = ImageDataset(self.train, transform=transform_train)
-        elif landmarks:
-            imageDataset = ImageLandmarksDataset(self.train, transform=transform_train)
-        else:
-            imageDataset = MultiScaleImageDataset(self.train, transforms=transform_train)
+            if self.keypoints_dir:
+                self._num_train_orients, self._num_train_landmarks = dataset.get_imagelandmark_info(dataset.train)
+
+            if self.keypoints_dir:
+                print('Create an image landmarks dataset')
+                imageDataset = ImageLandmarksDataset(self.train, transform=transform_train)
+            elif scales is None:
+                print('Create an image dataset')
+                imageDataset = ImageDataset(self.train, transform=transform_train)
+            else:
+                imageDataset = MultiScaleImageDataset(self.train, transforms=transform_train)
 
         if self.train_sampler == 'RandomIdentitySampler':
             self.trainloader = DataLoader(
@@ -170,6 +184,9 @@ class ImageDataManager(BaseDataManager):
         print("  # train ids      : {}".format(self._num_train_pids))
         print("  # train images   : {}".format(len(self.train)))
         print("  # train cameras  : {}".format(self._num_train_cams))
+        if self.keypoints_dir:
+            print("  # train orients  : {}".format(self._num_train_orients))
+            print("  # train landmarks  : {}".format(self._num_train_landmarks))
         print("  test names       : {}".format(self.target_names))
         print("  *****************************************")
         print("\n")

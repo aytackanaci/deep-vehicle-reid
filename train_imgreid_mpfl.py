@@ -51,7 +51,7 @@ parser = argument_parser()
 args = parser.parse_args()
 args.start_eval = args.max_epoch - 20-1
 args.fixbase_epoch = 0
-args.arch = 'dpfl'
+args.arch = 'mpfl'
 args.save_dir = exp_name(args)
 
 
@@ -72,20 +72,20 @@ def main():
     else:
         print("Currently using CPU, however, GPU is highly recommended")
 
-    print("Initializing MultiScale data manager")
-    dm = ImageDataManager(use_gpu, scales=[224,160], **image_dataset_kwargs(args))
+    print("Initializing Landmarks data manager")
+    dm = ImageDataManager(use_gpu, **image_dataset_kwargs(args))
     trainloader, testloader_dict = dm.return_dataloaders()
     # sys.exit(0)
 
     print("Initializing model: {}".format(args.arch))
-    model = models.init_model(name=args.arch, num_classes=dm.num_train_pids, num_orients=dm.num_train_orients, num_landmarks=dm.num_landmarks, input_size=args.width, loss={'xent'}, use_gpu=use_gpu)
+    model = models.init_model(name=args.arch, num_classes=dm.num_train_pids, num_orients=dm.num_train_orients, num_landmarks=dm.num_train_landmarks, input_size=args.width, loss={'xent'}, use_gpu=use_gpu)
     print("Model size: {:.3f} M".format(count_num_param(model)))
     print(model)
 
     criterion = {}
     criterion['id'] = CrossEntropyLoss(num_classes=dm.num_train_pids, use_gpu=use_gpu, label_smooth=args.label_smooth)
-    criterion['orient'] = CrossEntropyLoss(num_classes=dm.num_orients, use_gpu=use_gpu, label_smooth=args.label_smooth)
-    criterion['landmarks'] = CrossEntropyLoss(num_classes=dm.num_landmarks, use_gpu=use_gpu, label_smooth=args.label_smooth)
+    criterion['orient'] = CrossEntropyLoss(num_classes=dm.num_train_orients, use_gpu=use_gpu, label_smooth=args.label_smooth)
+    criterion['landmarks'] = CrossEntropyLoss(num_classes=dm.num_train_landmarks, use_gpu=use_gpu, label_smooth=args.label_smooth)
     optimizer = init_optimizer(model.parameters(), **optimizer_kwargs(args))
     scheduler = lr_scheduler.MultiStepLR(optimizer, milestones=args.stepsize, gamma=args.gamma)
     # scheduler = lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.1, patience=3, verbose=True, threshold=1e-04)
@@ -208,19 +208,21 @@ def train(epoch, model, criterion, optimizer, trainloader, use_gpu, fixbase=Fals
         open_all_layers(model)
 
     end = time.time()
-    for batch_idx, (img, pids, _, orients, landmarks, _) in enumerate(trainloader):
+    for batch_idx, (img, pids, _, porient, plandmarks, _) in enumerate(trainloader):
         data_time.update(time.time() - end)
 
+        plandmarks = plandmarks.float()
+        
         if use_gpu:
-            img, pids, orients, landmarks = img.cuda(), pids.cuda(), orients.cuda(), landmarks.cuda()
+            img, pids, porient, plandmarks = img.cuda(), pids.cuda(), porient.cuda(), plandmarks.cuda()
 
         y_id, y_orient, y_landmarks, y_orient_id, y_landmarks_id, y_consensus = model(img)
 
         loss_id = criterion['id'](y_id, pids)
-        loss_orients_id = criterion['id'](y_orient_id, pids)
+        loss_orient_id = criterion['id'](y_orient_id, pids)
         loss_landmarks_id = criterion['id'](y_landmarks_id, pids)
 
-        loss_orients = criterion['orient'](y_orients, porients)
+        loss_orients = criterion['orient'](y_orients, porient)
         loss_landmarks = criterion['landmarks'](y_landmarks, plandmarks, one_hot=True)
         
         loss_consensus = criterion['id'](y_consensus, pids)
@@ -232,8 +234,8 @@ def train(epoch, model, criterion, optimizer, trainloader, use_gpu, fixbase=Fals
 
         # Propagate back all the losses for all label types
         loss_id.backward(retain_graph=True)
-        loss_orients.backward(retain_graph=True)
-        loss_orients_id.backward(retain_graph=True)
+        loss_orient.backward(retain_graph=True)
+        loss_orient_id.backward(retain_graph=True)
         loss_landmarks.backward(retain_graph=True)
         loss_landmarks_id.backward(retain_graph=True)
         loss_consensus.backward()

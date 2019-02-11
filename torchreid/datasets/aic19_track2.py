@@ -23,7 +23,7 @@ class Aic19Track2(BaseImageDataset):
     ''' AIC 2019 Track2 (Re-ID)
     '''
 
-    dataset_dir = 'track2'
+    dataset_dir = 'aicity2019/track2'
 
     def __init__(self, root='data', verbose=True, aic19_manual_labels=False, val=None, **kwargs):
 
@@ -157,7 +157,7 @@ class Aic19Track2(BaseImageDataset):
                         num_gallery_images + int(man_idx),
                         gallery[int(im)-1][2])
 
-        labelled_query = filter(lambda x: len(x) == 2, query_ids)
+        labelled_query = list(filter(lambda x: len(x) == 2, query_ids))
 
         # sort query images by ID
         labelled_query.sort(key=lambda x: x[1])

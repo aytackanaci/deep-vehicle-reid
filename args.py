@@ -29,7 +29,9 @@ def argument_parser():
                         help="sampler for trainloader")
     parser.add_argument('--prefix', type=str, default='',
                         help="Prefix for experiment")
-
+    parser.add_argument('--keypoints-dir', type=str, default='',
+                        help="Directory for keypoints if available")
+    
     # ************************************************************
     # Video datasets
     # ************************************************************
@@ -184,6 +186,7 @@ def image_dataset_kwargs(parsed_args):
         'cuhk03_classic_split': parsed_args.cuhk03_classic_split,
         'aic19_manual_labels': parsed_args.aic19_manual_labels,
         'vehicleid_test_size': parsed_args.vehicleid_test_size,
+        'keypoints_dir': parsed_args.keypoints_dir,
         'val': parsed_args.val,
     }
 

@@ -14,7 +14,7 @@ from scipy.io import loadmat
 import numpy as np
 import h5py
 from scipy.misc import imsave
-import pandas>
+import pandas
 
 from .bases import BaseImageDataset
 
@@ -31,7 +31,7 @@ class VeRi776(BaseImageDataset):
     # identities: 776
     # images: 12936 (train) + 3368 (query) + 15913 (gallery)
     """
-    dataset_dir = 'veri/raw/VeRi'
+    dataset_dir = 'VeRi'
 
     def __init__(self, root='data',
                  verbose=True, keypoints_dir=None, **kwargs):
@@ -72,7 +72,52 @@ class VeRi776(BaseImageDataset):
             self.num_train_orients, self.num_train_landmarks = self.get_imagelandmark_info(self.train)
             self.num_query_orients, self.num_query_landmarks = self.get_imagelandmark_info(self.query)
             self.num_gallery_orients, self.num_gallery_landmarks = self.get_imagelandmark_info(self.gallery)
+
+    def get_imagedata_info(self, data):
+        pids, cams = [], []
+        if len(data[0]) == 3:
+            uniq_pids = set([i for (_, i, _) in data])
+            uniq_cams = set([c for (_, _, c) in data])
+        else: # Also have orientation and landmark info
+            uniq_pids = set([i for (_, i, _, _, _) in data])
+            uniq_cams = set([c for (_, _, c, _, _) in data])
+        num_pids = len(uniq_pids)
+        num_cams = len(uniq_cams)
+        num_imgs = len(data)
         
+        return num_pids, num_imgs, num_cams
+
+    def get_imagelandmark_info(self, data):
+        if len(data[0]) == 3:
+            return 0, 0
+        
+        uniq_orients = set([o for (_, _, _, o, _) in data])
+        num_orients = len(uniq_orients)
+        num_landmarks = len(data[0][4])
+
+        return num_orients, num_landmarks
+    
+    def print_dataset_statistics(self, train, query, gallery):
+        if len(train[0]) == 3:
+            return super(VeRi776, self).print_dataset_statistics(train, query, gallery)
+        else:
+            num_train_pids, num_train_imgs, num_train_cams = self.get_imagedata_info(train)
+            num_query_pids, num_query_imgs, num_query_cams = self.get_imagedata_info(query)
+            num_gallery_pids, num_gallery_imgs, num_gallery_cams = self.get_imagedata_info(gallery)
+
+            num_train_orients, num_train_landmarks = self.get_imagelandmark_info(train)
+            num_query_orients, num_query_landmarks = self.get_imagelandmark_info(query)
+            num_gallery_orients, num_gallery_landmarks = self.get_imagelandmark_info(gallery)
+            
+            print("Dataset statistics:")
+            print("  ----------------------------------------")
+            print("  subset   | # ids | # images | # cameras | # orients | # landmarks")
+            print("  ----------------------------------------")
+            print("  train    | {:5d} | {:8d} | {:9d} | {:9d} | {:11d}".format(num_train_pids, num_train_imgs, num_train_cams, num_train_orients, num_train_landmarks))
+            print("  query    | {:5d} | {:8d} | {:9d} | {:9d} | {:11d}".format(num_query_pids, num_query_imgs, num_query_cams, num_query_orients, num_query_landmarks))
+            print("  gallery  | {:5d} | {:8d} | {:9d} | {:9d} | {:11d}".format(num_gallery_pids, num_gallery_imgs, num_gallery_cams, num_gallery_orients, num_gallery_landmarks))
+            print("  ----------------------------------------")
+
     def _check_before_run(self):
         """Check if all files are available before going deeper"""
         # if not osp.exists(self.dataset_dir):
@@ -92,7 +137,7 @@ class VeRi776(BaseImageDataset):
         if keypoints:
             # If keypoints file given then process this to get landmarks and orients
             keypoints_f = pandas.read_csv(keypoints, header=None, sep=' ')
-            kp_image_pat = re.compile('\/([\d]+_c\d\d\d_.*\.jpg)')
+            kp_image_pat = re.compile('.*\/([\d]+_c\d\d\d_.*\.jpg)')
             
         pid_container = set()
         for img_path in img_paths:
@@ -114,21 +159,20 @@ class VeRi776(BaseImageDataset):
             if keypoints:
                 img_name = kp_image_pat.match(img_path).group(1)
                 row = keypoints_f[keypoints_f[0] == 'VeRi/image_train/'+img_name]
-                orient = row[41]
-                landmarks = [0]*20
-                for i in range(0:20):
-                    if row[2*i+1] > -1:
-                        landmarks[i] = 1
+                if len(row) == 0:
+                    orient = 0
+                    landmarks = np.zeros(20)
+                else:
+                    row = row.iloc[0]
+                
+                    orient = row[41]
+                    landmarks = np.zeros(20)
+                    for i in range(20):
+                        #print('entry at',i,row[2*i+1])
+                        if int(row[2*i+1]) > -1:
+                            landmarks[i] = 1
                 dataset.append((img_path, pid, camid, orient, landmarks))
             else:
                 dataset.append((img_path, pid, camid))
-
         
         return dataset
-
-    def _get_imagelandmark_info(self, dataset):
-        uniq_orients = set([o for (_, _, _, o, _) in dataset])
-        num_orients = len(uniq_orients)
-        num_landmarks = len(dataset[0][4])
-
-        return num_orients, num_landmarks
