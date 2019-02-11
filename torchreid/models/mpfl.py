@@ -10,27 +10,28 @@ from torch.nn import init
 
 from .mobilenetv2_pre import mobilenetv2ws, MobileNetV2wS
 
-__all__ = ['dpfl']
+__all__ = ['mpfl']
 
 class MPFL(nn.Module):
     """Multi-pose Feature Learner Implementation
     """
 
 
-    def __init__(self, num_classes, num_orients,
+    def __init__(self, num_classes, num_orients, num_landmarks,
                  loss,
                  scales=[1.0, 0.5],
                  dropout_p=0.001,
                  **kwargs):
 
-        super(DPFL, self).__init__()
+        super(MPFL, self).__init__()
 
         self.loss = loss
         self.num_classes = num_classes
         self.num_orients = num_orients
+        self.num_landmarks = num_landmarks
         self.dropout_p = dropout_p
 
-        #scale 1.0
+        print('Model created with num pids:',self.num_classes,'num orients:',self.num_orients,'num_landmarks:',self.num_landmarks)
 
         self.id_branch = mobilenetv2ws(num_classes=num_classes,
                                 loss=loss,
@@ -38,7 +39,7 @@ class MPFL(nn.Module):
                                 pretrained='imagenet',
                                 )
 
-        self.orients_branch = mobilenetv2ws(num_classes=num_orients,
+        self.orient_branch = mobilenetv2ws(num_classes=num_orients,
                                 loss=loss,
                                 input_size=224,
                                 pretrained='imagenet',
@@ -51,23 +52,23 @@ class MPFL(nn.Module):
                                 )
 
         self.id_branch.feature_extract_mode = True
-        self.orients_branch.feature_extract_mode = True
+        self.orient_branch.feature_extract_mode = True
         self.landmarks_branch.feature_extract_mode = True
 
         self.dropout_id = nn.Dropout(p=dropout_p, inplace=True)
-        self.dropout_orients = nn.Dropout(p=dropout_p, inplace=True)
+        self.dropout_orient = nn.Dropout(p=dropout_p, inplace=True)
         self.dropout_landmarks = nn.Dropout(p=dropout_p, inplace=True)
         self.dropout_consensus = nn.Dropout(p=dropout_p, inplace=True)
 
 
         self.fc_id = nn.Linear(self.id_branch.last_conv_out_ch, self.num_classes)
-        self.fc_orients = nn.Linear(self.orients_branch.last_conv_out_ch, self.num_orients)
-        self.fc_landmarks = nn.Linear(self.orients_branch.last_conv_out_ch, self.num_landmarks)
-        self.fc_orients_id = nn.Linear(self.orients_branch.last_conv_out_ch, self.num_classes)
-        self.fc_landmarks_id = nn.Linear(self.orients_branch.last_conv_out_ch, self.num_classes)
+        self.fc_orient = nn.Linear(self.orient_branch.last_conv_out_ch, self.num_orients)
+        self.fc_landmarks = nn.Linear(self.landmarks_branch.last_conv_out_ch, self.num_landmarks)
+        self.fc_orient_id = nn.Linear(self.orient_branch.last_conv_out_ch, self.num_classes)
+        self.fc_landmarks_id = nn.Linear(self.landmarks_branch.last_conv_out_ch, self.num_classes)
         
         self.fc_consensus = nn.Linear(
-                self.id_branch.last_conv_out_ch + self.orients_branch.last_conv_out_ch \
+                self.id_branch.last_conv_out_ch + self.orient_branch.last_conv_out_ch \
             + self.landmarks_branch.last_conv_out_ch,
                 self.num_classes)
 
@@ -123,20 +124,20 @@ class MPFL(nn.Module):
     def forward(self, x):
 
         f_id = self.id_branch(x)
-        f_orients = self.orients_branch(x)
+        f_orient = self.orient_branch(x)
         f_landmarks = self.landmarks_branch(x)
 
         f_id = self.dropout_id(f_id)
-        f_orients = self.dropout_orient(f_orients)
+        f_orient = self.dropout_orient(f_orient)
         f_landmarks = self.dropout_landmarks(f_landmarks)
 
         y_id = self.fc_id(f_id)
-        y_orients = self.fc_orient(f_orients)
-        y_landmarks = self.fc_orients(f_landmarks)
-        y_orients_id = self.fc_orients_id(f_orients)
-        y_landmarks_id = self.fc_orients_id(f_landmarks)
+        y_orient = self.fc_orient(f_orient)
+        y_landmarks = self.fc_landmarks(f_landmarks)
+        y_orient_id = self.fc_orient_id(f_orient)
+        y_landmarks_id = self.fc_landmarks_id(f_landmarks)
 
-        f_fusion = torch.cat([f_id, f_orients_id, f_landmarks_id], 1)
+        f_fusion = torch.cat([f_id, f_orient, f_landmarks], 1)
         f_fusion = self.dropout_consensus(f_fusion)
 
         if not self.training:
@@ -145,7 +146,7 @@ class MPFL(nn.Module):
         y_concensus = self.fc_consensus(f_fusion)
 
         if self.loss == {'xent'}:
-            return y_id, y_orients, y_landmarks, y_orients_id, y_landmarks_id, y_concensus
+            return y_id, y_orient, y_landmarks, y_orient_id, y_landmarks_id, y_concensus
         else:
             raise KeyError("Unsupported loss: {}".format(self.loss))
 

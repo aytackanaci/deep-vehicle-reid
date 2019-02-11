@@ -21,7 +21,7 @@ from .hacnn import *
 from .pcb import *
 from .mlfn import *
 from .dpfl import *
-from .mult-pose-fl import *
+from .mpfl import *
 
 
 __model_factory = {
