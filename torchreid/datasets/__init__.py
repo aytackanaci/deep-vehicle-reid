@@ -12,7 +12,7 @@ from .cuhk01 import CUHK01
 from .prid450s import PRID450S
 from .ilids import iLIDS
 from .sensereid import SenseReID
-from .veri776 import VeRi776
+from .veri776 import VeRi776, VeRiType
 from .aic19_track2 import Aic19Track2
 
 from .mars import Mars
@@ -44,6 +44,10 @@ __vidreid_factory = {
     'dukemtmcvidreid': DukeMTMCVidReID,
 }
 
+__class_factory = {
+    'veritype': VeRiType,
+}
+
 
 def init_imgreid_dataset(name, **kwargs):
     if name not in list(__imgreid_factory.keys()):
@@ -55,3 +59,9 @@ def init_vidreid_dataset(name, **kwargs):
     if name not in list(__vidreid_factory.keys()):
         raise KeyError("Invalid dataset, got '{}', but expected to be one of {}".format(name, list(__vidreid_factory.keys())))
     return __vidreid_factory[name](**kwargs)
+
+def init_class_dataset(name, **kwargs):
+    if name not in list(__class_factory.keys()):
+        raise KeyError("Invalid dataset, got '{}', but expected to be one of {}".format(name, list(__class_factory.keys())))
+    return __class_factory[name](**kwargs)
+

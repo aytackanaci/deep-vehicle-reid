@@ -15,21 +15,49 @@ import numpy as np
 import h5py
 from scipy.misc import imsave
 
-from .bases import BaseImageDataset
+from .bases import BaseImageDataset, BaseClassificationDataset
 
+
+class VeRiType(BaseClassificationDataset):
+    """
+    VeRi-776
+
+    """
+    dataset_dir = 'veri/raw/VeRi'
+
+    def __init__(self, root='data',
+            verbose=True, **kwargs):
+        super(VeRiType, self).__init__(root)
+
+        self.dataset_dir = osp.join(self.root, self.dataset_dir)
+        self.train_dir = osp.join(self.dataset_dir, 'image_train')
+
+        self.xml_path = osp.join(self.dataset_dir, 'train_label.xml')
+
+        self.train = self._process_xml(self.xml_path, 'type')
+        self._split_train()
+
+        self.num_train_pids, self.num_train_imgs = self.get_imagedata_info(self.train)
+
+        if verbose:
+            print("=> VeRi776 loaded")
+            self.print_dataset_statistics(self.train, self.test)
+
+    def _process_xml(self, xml_path, label):
+        from lxml import etree
+        tree = etree.parse(xml_path)
+        root = tree.getroot()
+        items = root.getchildren()[0]
+
+        if label == 'type':
+            train = [ (osp.join(self.train_dir, item.attrib['imageName']), int(item.attrib['typeID']) ) for item in items]
+
+        return train
 
 class VeRi776(BaseImageDataset):
     """
     VeRi-776
 
-    Reference:
-    Zheng et al. Scalable Person Re-identification: A Benchmark. ICCV 2015.
-
-    URL: http://www.liangzheng.org/Project/project_reid.html
-
-    Dataset statistics:
-    # identities: 776
-    # images: 12936 (train) + 3368 (query) + 15913 (gallery)
     """
     dataset_dir = 'veri/raw/VeRi'
 
@@ -40,6 +68,7 @@ class VeRi776(BaseImageDataset):
         self.train_dir = osp.join(self.dataset_dir, 'image_train')
         self.query_dir = osp.join(self.dataset_dir, 'image_query')
         self.gallery_dir = osp.join(self.dataset_dir, 'image_test')
+        self.xml_path = osp.join(self.dataset_dir, '')
 
         self._check_before_run()
 
