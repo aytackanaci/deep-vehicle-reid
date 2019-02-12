@@ -166,7 +166,7 @@ def evaluate(distmat, q_pids, g_pids, q_camids, g_camids, max_rank=50, use_metri
 
 # Classification topk metric
 
-def accuracy(output, target, topk=(1,)):
+def accuracy(output, target, topk=(1,), return_count=False):
     output, target = to_torch(output), to_torch(target)
     maxk = max(topk)
     batch_size = target.size(0)
@@ -178,5 +178,8 @@ def accuracy(output, target, topk=(1,)):
     ret = []
     for k in topk:
         correct_k = correct[:k].view(-1).float().sum(dim=0, keepdim=True)
-        ret.append(correct_k.mul_(1. / batch_size))
+        if return_count:
+            ret.append(correct_k)
+        else:
+            ret.append(correct_k.mul_(1. / batch_size))
     return ret

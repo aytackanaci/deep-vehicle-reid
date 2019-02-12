@@ -8,7 +8,7 @@ import torchvision
 import torch.utils.model_zoo as model_zoo
 
 
-__all__ = ['resnet18', 'resnet50', 'resnet50_fc512']
+__all__ = ['resnet18', 'resnet18_class', 'resnet50', 'resnet50_fc512']
 
 
 model_urls = {
@@ -223,6 +223,28 @@ class ResNet(nn.Module):
         else:
             raise KeyError("Unsupported loss: {}".format(self.loss))
 
+class ResNetClass(ResNet):
+
+    def __init__(self, **kwargs):
+        super(ResNetClass, self).__init__(**kwargs)
+
+    def forward(self, x):
+        f = self.featuremaps(x)
+        v = self.global_avgpool(f)
+        v = v.view(v.size(0), -1)
+
+        if self.fc is not None:
+            v = self.fc(v)
+
+        y = self.classifier(v)
+
+        if self.loss == {'xent'}:
+            return y
+        elif self.loss == {'xent', 'htri'}:
+            return y, v
+        else:
+            raise KeyError("Unsupported loss: {}".format(self.loss))
+
 
 def init_pretrained_weights(model, model_url):
     """
@@ -249,6 +271,21 @@ resnet152: block=Bottleneck, layers=[3, 8, 36, 3]
 
 def resnet18(num_classes, loss, pretrained='imagenet', **kwargs):
     model = ResNet(
+        num_classes=num_classes,
+        loss=loss,
+        block=BasicBlock,
+        layers=[2, 2, 2, 2],
+        last_stride=2,
+        fc_dims=None,
+        dropout_p=None,
+        **kwargs
+    )
+    if pretrained == 'imagenet':
+        init_pretrained_weights(model, model_urls['resnet18'])
+    return model
+
+def resnet18_class(num_classes, loss, pretrained='imagenet', **kwargs):
+    model = ResNetClass(
         num_classes=num_classes,
         loss=loss,
         block=BasicBlock,

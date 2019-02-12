@@ -33,6 +33,7 @@ class BaseDataManager(object):
         return self.testdataset_dict[name]['query'], self.testdataset_dict[name]['gallery']
 
 
+
 class ImageDataManager(BaseDataManager):
     """
     Image-ReID data manager
@@ -165,7 +166,6 @@ class ImageDataManager(BaseDataManager):
         print("  test names       : {}".format(self.target_names))
         print("  *****************************************")
         print("\n")
-
 
 class VideoDataManager(BaseDataManager):
     """

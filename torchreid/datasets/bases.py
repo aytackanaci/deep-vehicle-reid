@@ -1,9 +1,62 @@
 from __future__ import absolute_import
 from __future__ import print_function
 
-import os
 import os.path as osp
 import numpy as np
+
+class BaseClassificationDataset(object):
+
+    def __init__(self, root):
+        self.root = osp.expanduser(root)
+
+    def get_imagedata_info(self, data):
+        pids = []
+        for _, pid in data:
+            pids += [pid]
+        pids = set(pids)
+        num_pids = len(pids)
+        num_imgs = len(data)
+
+        return num_pids, num_imgs
+
+    def _split_train(self, split=0.9):
+        assert self.train is not None, 'Error: train images are not initialized'
+        print('Splitting Train')
+        import random
+        random.seed(1337)
+        train_pids = set()
+        num_pids, _ = self.get_imagedata_info(self.train)
+        classes = [[] for _ in range(num_pids)]
+
+        for im_path, pid in self.train:
+            classes[pid].append(im_path)
+            train_pids.add(pid)
+
+        train, val = [], []
+        for pid in train_pids:
+            random.shuffle(classes[pid])
+
+            len_images = len(classes[pid])
+            len_train = len_images - int(len_images*split)
+            imlist = [(item, pid) for item in classes[pid]]
+
+            train.extend(imlist[:len_train])
+            val.extend(imlist[len_train:])
+
+        self.train = train
+        self.test = val
+
+    def print_dataset_statistics(self, train, test):
+        num_train_pids, num_train_imgs= self.get_imagedata_info(train)
+        num_test_pids, num_test_imgs= self.get_imagedata_info(test)
+
+        print("Dataset statistics:")
+        print("  ----------------------------------------")
+        print("  subset   | # ids | # images ")
+        print("  ----------------------------------------")
+        print("  train    | {:5d} | {:8d} ".format(num_train_pids, num_train_imgs))
+        print("  test     | {:5d} | {:8d} ".format(num_test_pids, num_test_imgs))
+        print("  ----------------------------------------")
 
 
 class BaseDataset(object):

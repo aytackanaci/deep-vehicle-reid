@@ -47,7 +47,7 @@ class MultiScaleImageDataset(Dataset):
         return imgs, pid, camid, img_path
 
 
-class ClassficationDataset(Dataset):
+class ClassificationDataset(Dataset):
     """Image Person ReID Dataset"""
     def __init__(self, dataset, transform=None):
         self.dataset = dataset
@@ -57,7 +57,7 @@ class ClassficationDataset(Dataset):
         return len(self.dataset)
 
     def __getitem__(self, index):
-        img_path, pid, camid = self.dataset[index]
+        img_path, pid = self.dataset[index]
         img = read_image(img_path)
 
         if self.transform is not None:
