@@ -21,10 +21,15 @@ class MPFL(nn.Module):
                  loss,
                  scales=[1.0, 0.5],
                  dropout_p=0.001,
+                 train_orient=True,
+                 train_landmarks=True,
                  **kwargs):
 
         super(MPFL, self).__init__()
 
+        self.train_orient = train_orient
+        self.train_landmarks = train_landmarks
+        
         self.loss = loss
         self.num_classes = num_classes
         self.num_orients = num_orients
@@ -66,11 +71,13 @@ class MPFL(nn.Module):
         self.fc_landmarks = nn.Linear(self.landmarks_branch.last_conv_out_ch, self.num_landmarks)
         self.fc_orient_id = nn.Linear(self.orient_branch.last_conv_out_ch, self.num_classes)
         self.fc_landmarks_id = nn.Linear(self.landmarks_branch.last_conv_out_ch, self.num_classes)
-        
-        self.fc_consensus = nn.Linear(
-                self.id_branch.last_conv_out_ch + self.orient_branch.last_conv_out_ch \
-            + self.landmarks_branch.last_conv_out_ch,
-                self.num_classes)
+
+        self.fusion_last_conv_out = self.id_branch.last_conv_out_ch
+        if (train_orient):
+            self.fusion_last_conv_out += self.orient_branch.last_conv_out_ch
+        if (train_landmarks):
+            self.fusion_last_conv_out += self.landmarks_branch.last_conv_out_ch
+        self.fc_consensus = nn.Linear(self.fusion_last_conv_out, self.num_classes)
 
         # self.fc_consensus = self._construct_fc_layer(
         #         [self.num_classes],
@@ -136,8 +143,15 @@ class MPFL(nn.Module):
         y_landmarks = self.fc_landmarks(f_landmarks)
         y_orient_id = self.fc_orient_id(f_orient)
         y_landmarks_id = self.fc_landmarks_id(f_landmarks)
-
-        f_fusion = torch.cat([f_id, f_orient, f_landmarks], 1)
+        
+        f_fusion = f_id
+        #print(f_fusion)
+        if self.train_orient:
+            f_fusion = torch.cat([f_fusion, f_orient], 1)
+        if self.train_landmarks:
+            f_fusion = torch.cat([f_fusion, f_landmarks], 1)
+        #print(f_fusion)
+#        f_fusion = torch.cat(f_fusion, 1)
         f_fusion = self.dropout_consensus(f_fusion)
 
         if not self.training:
