@@ -26,7 +26,7 @@ from torchreid.utils.generaltools import set_random_seed
 from torchreid.eval_metrics import evaluate, accuracy
 from torchreid.optimizers import init_optimizer
 
-def exp_name(cfg):
+def exp_name(cfg, train_id, train_o, train_l):
     name = [
         'e_' + cfg.prefix,
         'S_' + '-'.join(cfg.source_names),
@@ -42,6 +42,9 @@ def exp_name(cfg):
         cfg.optim,
         'lr' + str(cfg.lr),
         'wd' + str(cfg.weight_decay),
+        'id' + str(train_id),
+        'orient' + str(train_o),
+        'landmarks' + str(train_l)
         ]
 
     return '_'.join(name)
@@ -49,10 +52,14 @@ def exp_name(cfg):
 # read config
 parser = argument_parser()
 args = parser.parse_args()
-args.start_eval = args.max_epoch - 20-1
 args.fixbase_epoch = 0
 args.arch = 'mpfl'
-args.save_dir = exp_name(args)
+
+train_id=True
+train_orient=False
+train_landmarks=True
+
+args.save_dir = exp_name(args, train_id, train_orient, train_landmarks)
 
 
 def main():
@@ -78,7 +85,7 @@ def main():
     # sys.exit(0)
 
     print("Initializing model: {}".format(args.arch))
-    model = models.init_model(name=args.arch, num_classes=dm.num_train_pids, num_orients=dm.num_train_orients, num_landmarks=dm.num_train_landmarks, input_size=args.width, loss={'xent'}, use_gpu=use_gpu)
+    model = models.init_model(name=args.arch, num_classes=dm.num_train_pids, num_orients=dm.num_train_orients, num_landmarks=dm.num_train_landmarks, input_size=args.width, loss={'xent'}, use_gpu=use_gpu, train_orient=train_orient, train_landmarks=train_landmarks)
     print("Model size: {:.3f} M".format(count_num_param(model)))
     print(model)
 
@@ -212,7 +219,8 @@ def train(epoch, model, criterion, optimizer, trainloader, use_gpu, fixbase=Fals
         data_time.update(time.time() - end)
 
         plandmarks = plandmarks.float()
-        
+        #print(pids, porient, plandmarks)
+
         if use_gpu:
             img, pids, porient, plandmarks = img.cuda(), pids.cuda(), porient.cuda(), plandmarks.cuda()
 
@@ -229,15 +237,19 @@ def train(epoch, model, criterion, optimizer, trainloader, use_gpu, fixbase=Fals
 
         prec, = accuracy(y_consensus.data, pids.data)
         prec1 = prec[0]  # get top 1
-
+        
         optimizer.zero_grad()
 
         # Propagate back all the losses for all label types
-        loss_id.backward(retain_graph=True)
-        loss_orient.backward(retain_graph=True)
-        loss_orient_id.backward(retain_graph=True)
-        loss_landmarks.backward(retain_graph=True)
-        loss_landmarks_id.backward(retain_graph=True)
+        if (train_id):
+            loss_id.backward(retain_graph=True)
+        if (train_orient):
+            loss_orient.backward(retain_graph=True)
+            loss_orient_id.backward(retain_graph=True)
+        if (train_landmarks):
+            loss_landmarks.backward(retain_graph=True)
+            loss_landmarks_id.backward(retain_graph=True)
+
         loss_consensus.backward()
 
         optimizer.step()
