@@ -164,13 +164,16 @@ class VeRi776(BaseImageDataset):
                     landmarks = np.zeros(20)
                 else:
                     row = row.iloc[0]
-                
                     orient = row[41]
+
+                    # TODO get this to work instead
+                    # landmarks = np.array([min(0,int(x))+1 for x in row[list(range(1,len(row)-1,2))]]) 
                     landmarks = np.zeros(20)
                     for i in range(20):
                         #print('entry at',i,row[2*i+1])
                         if int(row[2*i+1]) > -1:
                             landmarks[i] = 1
+
                 dataset.append((img_path, pid, camid, orient, landmarks))
             else:
                 dataset.append((img_path, pid, camid))
