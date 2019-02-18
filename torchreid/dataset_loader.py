@@ -84,7 +84,7 @@ class ImageDataset(Dataset):
         return img, pid, camid, img_path
 
 class ImageLandmarksDataset(Dataset):
-    """Image Person ReID Dataset"""
+    """Image Person ReID Dataset with Landmarks"""
     def __init__(self, dataset, transform=None):
         self.dataset = dataset
         self.transform = transform
@@ -93,14 +93,19 @@ class ImageLandmarksDataset(Dataset):
         return len(self.dataset)
 
     def __getitem__(self, index):
-        img_path, pid, orients, landmarks, camid = self.dataset[index]
+        data = self.dataset[index]
+        img_path, pid, camid = data[0:3]
         img = read_image(img_path)
-
+        
         if self.transform is not None:
             img = self.transform(img)
 
-        return img, pid, orients, landmarks, camid, img_path
-
+        if len(data) > 3:
+            orient, landmarks = data[3:5]
+            return img, pid, camid, orient, landmarks, img_path
+        else:
+            return img, pid, camid, img_path
+        
 class VideoDataset(Dataset):
     """Video Person ReID Dataset.
     Note batch data has shape (batch, seq_len, channel, height, width).

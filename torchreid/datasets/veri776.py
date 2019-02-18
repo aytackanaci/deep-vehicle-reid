@@ -56,66 +56,58 @@ class VeRi776(BaseImageDataset):
         query = self._process_dir(self.query_dir, relabel=False, keypoints=keypoints_query)
         gallery = self._process_dir(self.gallery_dir, relabel=False, keypoints=keypoints_gallery)
 
-        if verbose:
-            print("=> VeRi776 loaded")
-            self.print_dataset_statistics(train, query, gallery)
-
         self.train = train
         self.query = query
         self.gallery = gallery
 
-        self.num_train_pids, self.num_train_imgs, self.num_train_cams = self.get_imagedata_info(self.train)
-        self.num_query_pids, self.num_query_imgs, self.num_query_cams = self.get_imagedata_info(self.query)
-        self.num_gallery_pids, self.num_gallery_imgs, self.num_gallery_cams = self.get_imagedata_info(self.gallery)
+        train_info = self.get_imagedata_info(self.train)
+        query_info = self.get_imagedata_info(self.query)
+        gallery_info = self.get_imagedata_info(self.gallery)
 
-        if keypoints_dir:
-            self.num_train_orients, self.num_train_landmarks = self.get_imagelandmark_info(self.train)
-            self.num_query_orients, self.num_query_landmarks = self.get_imagelandmark_info(self.query)
-            self.num_gallery_orients, self.num_gallery_landmarks = self.get_imagelandmark_info(self.gallery)
+        self.num_train_pids, self.num_train_imgs, self.num_train_cams = train_info[0:3]
+        self.num_query_pids, self.num_query_imgs, self.num_query_cams = query_info[0:3]
+        self.num_gallery_pids, self.num_gallery_imgs, self.num_gallery_cams = gallery_info[0:3]
+        
+        if len(train_info) > 3:
+            self.num_train_orients, self.num_train_landmarks = train_info[3:5]
+            self.num_query_orients, self.num_query_landmarks = query_info[3:5]
+            self.num_gallery_orients, self.num_gallery_landmarks = gallery_info[3:5]
+
+        if verbose:
+            print("=> VeRi776 loaded")
+            self.print_dataset_statistics(train, query, gallery)
 
     def get_imagedata_info(self, data):
-        pids, cams = [], []
         if len(data[0]) == 3:
             uniq_pids = set([i for (_, i, _) in data])
             uniq_cams = set([c for (_, _, c) in data])
-        else: # Also have orientation and landmark info
+        else:
+            # Also have orientation and landmark info
             uniq_pids = set([i for (_, i, _, _, _) in data])
             uniq_cams = set([c for (_, _, c, _, _) in data])
+            uniq_orients = set([o for (_, _, _, o, _) in data])
+            num_orients = len(uniq_orients)
+            num_landmarks = len(data[0][4])
         num_pids = len(uniq_pids)
         num_cams = len(uniq_cams)
         num_imgs = len(data)
-        
-        return num_pids, num_imgs, num_cams
 
-    def get_imagelandmark_info(self, data):
         if len(data[0]) == 3:
-            return 0, 0
-        
-        uniq_orients = set([o for (_, _, _, o, _) in data])
-        num_orients = len(uniq_orients)
-        num_landmarks = len(data[0][4])
-
-        return num_orients, num_landmarks
+            return num_pids, num_imgs, num_cams
+        else:
+            return num_pids, num_imgs, num_cams, num_orients, num_landmarks
     
     def print_dataset_statistics(self, train, query, gallery):
         if len(train[0]) == 3:
             return super(VeRi776, self).print_dataset_statistics(train, query, gallery)
-        else:
-            num_train_pids, num_train_imgs, num_train_cams = self.get_imagedata_info(train)
-            num_query_pids, num_query_imgs, num_query_cams = self.get_imagedata_info(query)
-            num_gallery_pids, num_gallery_imgs, num_gallery_cams = self.get_imagedata_info(gallery)
-
-            num_train_orients, num_train_landmarks = self.get_imagelandmark_info(train)
-            num_query_orients, num_query_landmarks = self.get_imagelandmark_info(query)
-            num_gallery_orients, num_gallery_landmarks = self.get_imagelandmark_info(gallery)
-            
+        else:            
             print("Dataset statistics:")
             print("  ----------------------------------------")
             print("  subset   | # ids | # images | # cameras | # orients | # landmarks")
             print("  ----------------------------------------")
-            print("  train    | {:5d} | {:8d} | {:9d} | {:9d} | {:11d}".format(num_train_pids, num_train_imgs, num_train_cams, num_train_orients, num_train_landmarks))
-            print("  query    | {:5d} | {:8d} | {:9d} | {:9d} | {:11d}".format(num_query_pids, num_query_imgs, num_query_cams, num_query_orients, num_query_landmarks))
-            print("  gallery  | {:5d} | {:8d} | {:9d} | {:9d} | {:11d}".format(num_gallery_pids, num_gallery_imgs, num_gallery_cams, num_gallery_orients, num_gallery_landmarks))
+            print("  train    | {:5d} | {:8d} | {:9d} | {:9d} | {:11d}".format(self.num_train_pids, self.num_train_imgs, self.num_train_cams, self.num_train_orients, self.num_train_landmarks))
+            print("  query    | {:5d} | {:8d} | {:9d} | {:9d} | {:11d}".format(self.num_query_pids, self.num_query_imgs, self.num_query_cams, self.num_query_orients, self.num_query_landmarks))
+            print("  gallery  | {:5d} | {:8d} | {:9d} | {:9d} | {:11d}".format(self.num_gallery_pids, self.num_gallery_imgs, self.num_gallery_cams, self.num_gallery_orients, self.num_gallery_landmarks))
             print("  ----------------------------------------")
 
     def _check_before_run(self):
