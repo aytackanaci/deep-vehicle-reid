@@ -56,7 +56,7 @@ args.fixbase_epoch = 0
 args.arch = 'mpfl'
 
 train_id=True
-train_orient=False
+train_orient=True
 train_landmarks=True
 
 args.save_dir = exp_name(args, train_id, train_orient, train_landmarks)
@@ -81,7 +81,7 @@ def main():
 
     print("Initializing Landmarks data manager")
     dm = ImageDataManager(use_gpu, **image_dataset_kwargs(args))
-    trainloader, testloader_dict = dm.return_dataloaders()
+    trainloader_lm, trainloader, testloader_dict = dm.return_dataloaders(landmarks=True)
     # sys.exit(0)
 
     print("Initializing model: {}".format(args.arch))
@@ -141,6 +141,7 @@ def main():
 
         for epoch in range(args.fixbase_epoch):
             start_train_time = time.time()
+            loss, prec1 = train(epoch, model, criterion, optimizer, trainloader_lm, use_gpu, fixbase=True)
             loss, prec1 = train(epoch, model, criterion, optimizer, trainloader, use_gpu, fixbase=True)
             print('Epoch: [{:02d}] [Average Loss:] {:.4f}\t [Average Prec.:] {:.2%}'.format(epoch+1, loss, prec1))
             train_time += round(time.time() - start_train_time)
@@ -150,6 +151,7 @@ def main():
 
     for epoch in range(args.start_epoch, args.max_epoch):
         start_train_time = time.time()
+        loss, prec1 = train(epoch, model, criterion, optimizer, trainloader_lm, use_gpu)
         loss, prec1 = train(epoch, model, criterion, optimizer, trainloader, use_gpu)
         print('Epoch: [{:02d}] [Average Loss:] {:.4f}\t [Average Prec.:] {:.2%}'.format(epoch+1, loss, prec1))
         train_time += round(time.time() - start_train_time)
@@ -215,14 +217,23 @@ def train(epoch, model, criterion, optimizer, trainloader, use_gpu, fixbase=Fals
         open_all_layers(model)
 
     end = time.time()
-    for batch_idx, (img, pids, _, porient, plandmarks, _) in enumerate(trainloader):
+    for batch_idx, data in enumerate(trainloader):
         data_time.update(time.time() - end)
 
-        plandmarks = plandmarks.float()
-        #print(pids, porient, plandmarks)
+        update_lmo = False
 
+        # Only have id prediction
+        img, pids = data[0:2]
         if use_gpu:
-            img, pids, porient, plandmarks = img.cuda(), pids.cuda(), porient.cuda(), plandmarks.cuda()
+            img, pids = img.cuda(), pids.cuda(),
+        
+        if len(data) > 4:
+            # We have landmark and orientation labels
+            porient, plandmarks = data[3:5]
+            plandmarks = plandmarks.float()
+            if use_gpu:
+                porient, plandmarks =  porient.cuda(), plandmarks.cuda()
+            update_lmo = True
 
         y_id, y_orient, y_landmarks, y_orient_id, y_landmarks_id, y_consensus = model(img)
 
@@ -230,8 +241,9 @@ def train(epoch, model, criterion, optimizer, trainloader, use_gpu, fixbase=Fals
         loss_orient_id = criterion['id'](y_orient_id, pids)
         loss_landmarks_id = criterion['id'](y_landmarks_id, pids)
 
-        loss_orients = criterion['orient'](y_orients, porient)
-        loss_landmarks = criterion['landmarks'](y_landmarks, plandmarks, one_hot=True)
+        if update_lmo:
+            loss_orients = criterion['orient'](y_orient, porient)
+            loss_landmarks = criterion['landmarks'](y_landmarks, plandmarks, one_hot=True)
         
         loss_consensus = criterion['id'](y_consensus, pids)
 
@@ -244,10 +256,12 @@ def train(epoch, model, criterion, optimizer, trainloader, use_gpu, fixbase=Fals
         if (train_id):
             loss_id.backward(retain_graph=True)
         if (train_orient):
-            loss_orient.backward(retain_graph=True)
+            if update_lmo:
+                loss_orient.backward(retain_graph=True)
             loss_orient_id.backward(retain_graph=True)
         if (train_landmarks):
-            loss_landmarks.backward(retain_graph=True)
+            if update_lmo:
+                loss_landmarks.backward(retain_graph=True)
             loss_landmarks_id.backward(retain_graph=True)
 
         loss_consensus.backward()
