@@ -84,6 +84,9 @@ def main():
     trainloader_lm, trainloader, testloader_dict = dm.return_dataloaders(landmarks=True)
     # sys.exit(0)
 
+    if not trainloader_lm:
+        print('Warning: landmarks train loader not given, only id labels will be used for training')
+
     print("Initializing model: {}".format(args.arch))
     model = models.init_model(name=args.arch, num_classes=dm.num_train_pids, num_orients=dm.num_train_orients, num_landmarks=dm.num_train_landmarks, input_size=args.width, loss={'xent'}, use_gpu=use_gpu, train_orient=train_orient, train_landmarks=train_landmarks)
     print("Model size: {:.3f} M".format(count_num_param(model)))
@@ -150,6 +153,7 @@ def main():
         optimizer.load_state_dict(initial_optim_state)
 
     for epoch in range(args.start_epoch, args.max_epoch):
+        print('Training on non-landmark data')
         start_train_time = time.time()
         loss, prec1 = train(epoch, model, criterion, optimizer, trainloader_lm, use_gpu)
         loss, prec1 = train(epoch, model, criterion, optimizer, trainloader, use_gpu)
@@ -171,7 +175,7 @@ def main():
                 if epoch+1 == args.max_epoch:
                     rank1, mAP = test(model, test_set, name, queryloader, galleryloader, use_gpu, visualize=True)
                 else:
-                    rank1, mAP = test(model, test_set, name, queryloader, galleryloader, use_gpu)
+                    rank1, mAP = test(model, test_set, name, queryloader, galleryloader, use_gpu, visualize=args.visualize_ranks)
 
                 ranklogger.write(name, epoch + 1, rank1)
                 maplogger.write(name, epoch + 1, mAP)
