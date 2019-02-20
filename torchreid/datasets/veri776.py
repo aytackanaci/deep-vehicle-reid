@@ -34,13 +34,16 @@ class VeRi776(BaseImageDataset):
     dataset_dir = 'VeRi'
 
     def __init__(self, root='data',
-                 verbose=True, keypoints_dir=None, **kwargs):
+                 verbose=True, keypoints_dir=None,
+                 regress_landmarks=False,
+                 **kwargs):
         super(VeRi776, self).__init__(root)
         self.dataset_dir = osp.join(self.root, self.dataset_dir)
         self.train_dir = osp.join(self.dataset_dir, 'image_train')
         self.query_dir = osp.join(self.dataset_dir, 'image_query')
         self.gallery_dir = osp.join(self.dataset_dir, 'image_test')
-
+        self.regress_landmarks = regress_landmarks
+        
         self._check_before_run()
 
         if keypoints_dir:
@@ -52,6 +55,7 @@ class VeRi776(BaseImageDataset):
             keypoints_query=None
             keypoints_gallery=None
 
+            
         train = self._process_dir(self.train_dir, relabel=True, keypoints=keypoints_train)
         query = self._process_dir(self.query_dir, relabel=False, keypoints=keypoints_query)
         gallery = self._process_dir(self.gallery_dir, relabel=False, keypoints=keypoints_gallery)
@@ -160,11 +164,14 @@ class VeRi776(BaseImageDataset):
 
                     # TODO get this to work instead
                     # landmarks = np.array([min(0,int(x))+1 for x in row[list(range(1,len(row)-1,2))]]) 
-                    landmarks = np.zeros(20)
-                    for i in range(20):
-                        #print('entry at',i,row[2*i+1])
-                        if int(row[2*i+1]) > -1:
-                            landmarks[i] = 1
+                    if self.regress_landmarks:
+                        # TODO these need to be normalised according to the image resizing
+                        landmarks = np.array(row[1:41])
+                    else:
+                        landmarks = np.zeros(20)
+                        for i in range(20):
+                            if int(row[2*i+1]) > -1:
+                                landmarks[i] = 1
 
                 dataset.append((img_path, pid, camid, orient, landmarks))
             else:

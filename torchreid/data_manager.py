@@ -70,7 +70,8 @@ class ImageDataManager(BaseDataManager):
                  aic19_manual_labels=False,
                  vehicleid_test_size='',
                  scales=None,
-                 keypoints_dirs=None
+                 keypoints_dirs=None,
+                 regress_landmarks=False
                  ):
         super(ImageDataManager, self).__init__()
         self.use_gpu = use_gpu
@@ -121,7 +122,7 @@ class ImageDataManager(BaseDataManager):
             
             dataset = init_imgreid_dataset(
                 root=self.root, name=name, split_id=self.split_id, cuhk03_labeled=self.cuhk03_labeled,
-                cuhk03_classic_split=self.cuhk03_classic_split, val=self.val, keypoints_dir=keypoints_dir
+                cuhk03_classic_split=self.cuhk03_classic_split, val=self.val, keypoints_dir=keypoints_dir, regress_landmarks=regress_landmarks
             )
 
             for data in dataset.train:

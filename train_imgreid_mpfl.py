@@ -26,7 +26,7 @@ from torchreid.utils.generaltools import set_random_seed
 from torchreid.eval_metrics import evaluate, accuracy
 from torchreid.optimizers import init_optimizer
 
-def exp_name(cfg, train_id, train_o, train_l):
+def exp_name(cfg, train_o, train_l):
     name = [
         'e_' + cfg.prefix,
         'S_' + '-'.join(cfg.source_names),
@@ -42,28 +42,38 @@ def exp_name(cfg, train_id, train_o, train_l):
         cfg.optim,
         'lr' + str(cfg.lr),
         'wd' + str(cfg.weight_decay),
-        'id' + str(train_id),
         'orient' + str(train_o),
-        'landmarks' + str(train_l)
+        'landmarks' + str(train_l),
+        'lmRegress' if cfg.regress_landmarks else 'lmClass'
         ]
 
     return '_'.join(name)
 
-# read config
-parser = argument_parser()
-args = parser.parse_args()
-args.fixbase_epoch = 0
-args.arch = 'mpfl'
 
-train_id=True
 train_orient=True
 train_landmarks=True
 
-args.save_dir = exp_name(args, train_id, train_orient, train_landmarks)
-
-
 def main():
-    global args
+    global args, train_orient, train_landmarks
+
+    # read config
+    parser = argument_parser()
+    args = parser.parse_args()
+    args.fixbase_epoch = 0
+    args.arch = 'mpfl'
+    
+    if args.use_landmarks_only and args.use_orient_only:
+        print('Error: Only one of --use_orient_only or --use_landmarks_only can be selected.')
+        sys.exit(1)
+
+    if args.use_orient_only:
+        print('Training only ID and orient branches')
+        train_landmarks=False
+    elif args.use_landmarks_only:
+        print('Training only ID and landmark branches')
+        train_orient=False
+        
+    args.save_dir = exp_name(args, train_orient, train_landmarks)
 
     set_random_seed(args.seed)
     if not args.use_avai_gpus: os.environ['CUDA_VISIBLE_DEVICES'] = args.gpu_devices
@@ -88,7 +98,7 @@ def main():
         print('Warning: landmarks train loader not given, only id labels will be used for training')
 
     print("Initializing model: {}".format(args.arch))
-    model = models.init_model(name=args.arch, num_classes=dm.num_train_pids, num_orients=dm.num_train_orients, num_landmarks=dm.num_train_landmarks, input_size=args.width, loss={'xent'}, use_gpu=use_gpu, train_orient=train_orient, train_landmarks=train_landmarks)
+    model = models.init_model(name=args.arch, num_classes=dm.num_train_pids, num_orients=dm.num_train_orients, num_landmarks=dm.num_train_landmarks, input_size=args.width, loss={'xent'}, use_gpu=use_gpu, train_orient=train_orient, train_landmarks=train_landmarks, regress_lm=args.regress_landmarks)
     print("Model size: {:.3f} M".format(count_num_param(model)))
     print(model)
 
@@ -257,8 +267,7 @@ def train(epoch, model, criterion, optimizer, trainloader, use_gpu, fixbase=Fals
         optimizer.zero_grad()
 
         # Propagate back all the losses for all label types
-        if (train_id):
-            loss_id.backward(retain_graph=True)
+        loss_id.backward(retain_graph=True)
         if (train_orient):
             if update_lmo:
                 loss_orient.backward(retain_graph=True)
