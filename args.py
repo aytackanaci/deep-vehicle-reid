@@ -163,7 +163,12 @@ def argument_parser():
                         help="use available gpus instead of specified devices (useful when using managed clusters)")
     parser.add_argument('--visualize-ranks', action='store_true',
                         help="visualize ranked results, only available in evaluation mode")
-
+    parser.add_argument('--use-orient-only', action='store_true',
+                        help="MPFL specific: train only ID and orient branches")
+    parser.add_argument('--use-landmarks-only', action='store_true',
+                        help="MPFL specific: train only ID and landmarks branches")
+    parser.add_argument('--regress_landmarks', action='store_true',
+                        help="MPFL specific: regress landmark positions rather than classify presence only")
     return parser
 
 
@@ -189,6 +194,7 @@ def image_dataset_kwargs(parsed_args):
         'aic19_manual_labels': parsed_args.aic19_manual_labels,
         'vehicleid_test_size': parsed_args.vehicleid_test_size,
         'keypoints_dirs': parsed_args.keypoints_dirs,
+        'regress_landmarks': parsed_args.regress_landmarks,
         'val': parsed_args.val,
     }
 

@@ -23,17 +23,22 @@ class MPFL(nn.Module):
                  dropout_p=0.001,
                  train_orient=True,
                  train_landmarks=True,
+                 regress_landmarks=False,
                  **kwargs):
 
         super(MPFL, self).__init__()
 
         self.train_orient = train_orient
         self.train_landmarks = train_landmarks
+        self.regress_lms = regress_landmarks
         
         self.loss = loss
         self.num_classes = num_classes
         self.num_orients = num_orients
         self.num_landmarks = num_landmarks
+        if regress_landmarks:
+            self.num_landmarks *= 2
+
         self.dropout_p = dropout_p
 
         print('Model created with num pids:',self.num_classes,'num orients:',self.num_orients,'num_landmarks:',self.num_landmarks)
