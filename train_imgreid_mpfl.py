@@ -166,9 +166,10 @@ def main():
 
     feedback_consensus = True
     for epoch in range(args.start_epoch, args.max_epoch):
-        print('Training on non-landmark data')
         start_train_time = time.time()
+        print('Training on landmark data')
         loss, prec1 = train(epoch, model, criterion, optimizer, trainloader_lm, use_gpu, feedback_consensus=feedback_consensus)
+        print('Training on non-landmark data')
         loss, prec1 = train(epoch, model, criterion, optimizer, trainloader, use_gpu, feedback_consensus=feedback_consensus)
         print('Epoch: [{:02d}] [Average Loss:] {:.4f}\t [Average Prec.:] {:.2%}'.format(epoch+1, loss, prec1))
         train_time += round(time.time() - start_train_time)
