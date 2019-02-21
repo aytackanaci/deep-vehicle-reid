@@ -12,11 +12,12 @@ import torch
 import torch.nn as nn
 import torch.backends.cudnn as cudnn
 from torch.optim import lr_scheduler
+from torch.nn import functional as F
 
 from args import argument_parser, image_dataset_kwargs, optimizer_kwargs
 from torchreid.data_manager import ImageDataManager
 from torchreid import models
-from torchreid.losses import CrossEntropyLoss, DeepSupervision
+from torchreid.losses import CrossEntropyLoss, DeepSupervision, KLDivLoss
 from torchreid.utils.iotools import save_checkpoint, check_isfile
 from torchreid.utils.avgmeter import AverageMeter
 from torchreid.utils.loggers import Logger, RankLogger
@@ -104,6 +105,7 @@ def main():
 
     criterion = {}
     criterion['id'] = CrossEntropyLoss(num_classes=dm.num_train_pids, use_gpu=use_gpu, label_smooth=args.label_smooth)
+    criterion['id_soft'] = CrossEntropyLoss(num_classes=dm.num_train_pids, use_gpu=use_gpu, label_smooth=False, multiclass=True)
     criterion['orient'] = CrossEntropyLoss(num_classes=dm.num_train_orients, use_gpu=use_gpu, label_smooth=args.label_smooth)
     criterion['landmarks'] = CrossEntropyLoss(num_classes=dm.num_train_landmarks, use_gpu=use_gpu, label_smooth=args.label_smooth)
     optimizer = init_optimizer(model.parameters(), **optimizer_kwargs(args))
@@ -162,11 +164,12 @@ def main():
         print("Done. All layers are open to train for {} epochs".format(args.max_epoch))
         optimizer.load_state_dict(initial_optim_state)
 
+    feedback_consensus = True
     for epoch in range(args.start_epoch, args.max_epoch):
         print('Training on non-landmark data')
         start_train_time = time.time()
-        loss, prec1 = train(epoch, model, criterion, optimizer, trainloader_lm, use_gpu)
-        loss, prec1 = train(epoch, model, criterion, optimizer, trainloader, use_gpu)
+        loss, prec1 = train(epoch, model, criterion, optimizer, trainloader_lm, use_gpu, feedback_consensus=feedback_consensus)
+        loss, prec1 = train(epoch, model, criterion, optimizer, trainloader, use_gpu, feedback_consensus=feedback_consensus)
         print('Epoch: [{:02d}] [Average Loss:] {:.4f}\t [Average Prec.:] {:.2%}'.format(epoch+1, loss, prec1))
         train_time += round(time.time() - start_train_time)
 
@@ -217,7 +220,7 @@ def main():
     maplogger.show_summary()
 
 
-def train(epoch, model, criterion, optimizer, trainloader, use_gpu, fixbase=False):
+def train(epoch, model, criterion, optimizer, trainloader, use_gpu, fixbase=False, feedback_consensus=True):
     losses = AverageMeter()
     precisions = AverageMeter()
     batch_time = AverageMeter()
@@ -256,9 +259,15 @@ def train(epoch, model, criterion, optimizer, trainloader, use_gpu, fixbase=Fals
         loss_landmarks_id = criterion['id'](y_landmarks_id, pids)
 
         if update_lmo:
-            loss_orients = criterion['orient'](y_orient, porient)
+            loss_orient = criterion['orient'](y_orient, porient)
             loss_landmarks = criterion['landmarks'](y_landmarks, plandmarks, one_hot=True)
-        
+
+        if feedback_consensus:
+            consensus_prob = F.softmax(y_consensus, dim=1)
+            loss_consensus_id = criterion['id_soft'](y_id, consensus_prob)
+            loss_consensus_orient = criterion['id_soft'](y_orient_id, consensus_prob)
+            loss_consensus_landmarks = criterion['id_soft'](y_landmarks_id, consensus_prob)
+
         loss_consensus = criterion['id'](y_consensus, pids)
 
         prec, = accuracy(y_consensus.data, pids.data)
@@ -267,16 +276,27 @@ def train(epoch, model, criterion, optimizer, trainloader, use_gpu, fixbase=Fals
         optimizer.zero_grad()
 
         # Propagate back all the losses for all label types
+
+        # Individual branch losses according to labels
         loss_id.backward(retain_graph=True)
-        if (train_orient):
+        if train_orient:
             if update_lmo:
                 loss_orient.backward(retain_graph=True)
             loss_orient_id.backward(retain_graph=True)
-        if (train_landmarks):
+        if train_landmarks:
             if update_lmo:
                 loss_landmarks.backward(retain_graph=True)
             loss_landmarks_id.backward(retain_graph=True)
 
+        # Feedback loss according to consensus
+        if feedback_consensus:
+            if train_orient:
+                loss_consensus_orient.backward(retain_graph=True)
+            if train_landmarks:
+                loss_consensus_landmarks.backward(retain_graph=True)
+            loss_consensus_id.backward(retain_graph=True)
+
+        # Consensus loss according to labels
         loss_consensus.backward()
 
         optimizer.step()
