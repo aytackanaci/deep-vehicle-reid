@@ -21,10 +21,12 @@ from .pcb import *
 from .mlfn import *
 from .dpfl import *
 
+from .bilinear import *
 
 __model_factory = {
     # classification
     'resnet18_class': resnet18_class,
+    'bilinear': bilinear,
     # image classification models
     'resnet18': resnet18,
     'resnet50': resnet50,
