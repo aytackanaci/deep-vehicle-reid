@@ -227,14 +227,22 @@ class ResNetClass(ResNet):
 
     def __init__(self, **kwargs):
         super(ResNetClass, self).__init__(**kwargs)
+        self.feature_extract_mode = False
+        self.backbone_mode = False
 
     def forward(self, x):
         f = self.featuremaps(x)
+        if self.backbone_mode:
+            return f
+
         v = self.global_avgpool(f)
         v = v.view(v.size(0), -1)
 
         if self.fc is not None:
             v = self.fc(v)
+
+        if self.feature_extract_mode:
+            return v
 
         y = self.classifier(v)
 
