@@ -50,7 +50,7 @@ def exp_name(cfg):
 # read config
 parser = argument_parser()
 args = parser.parse_args()
-args.start_eval = args.max_epoch - 20 -1
+# args.start_eval = args.max_epoch - 20 -1
 args.save_dir = exp_name(args)
 
 
@@ -83,8 +83,8 @@ def main():
 
     criterion = CrossEntropyLoss(num_classes=dm.num_train_pids, use_gpu=use_gpu, label_smooth=args.label_smooth)
     optimizer = init_optimizer(model.parameters(), **optimizer_kwargs(args))
-    scheduler = lr_scheduler.MultiStepLR(optimizer, milestones=args.stepsize, gamma=args.gamma)
-    # scheduler = lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.1, patience=3, verbose=True, threshold=1e-04)
+    # scheduler = lr_scheduler.MultiStepLR(optimizer, milestones=args.stepsize, gamma=args.gamma)
+    scheduler = lr_scheduler.ReduceLROnPlateau(optimizer, mode='max', factor=0.1, patience=3, verbose=True, threshold=1e-04)
 
     if args.load_weights and check_isfile(args.load_weights): # load pretrained weights but ignore layers that don't match in size
         checkpoint = torch.load(args.load_weights)
@@ -138,16 +138,15 @@ def main():
     for epoch in range(args.start_epoch, args.max_epoch):
         start_train_time = time.time()
         loss, prec1 = train(epoch, model, criterion, optimizer, trainloader, use_gpu)
-        print('Epoch: [{:02d}] [Average Loss:] {:.4f}\t [Average Prec.:] {:.2%}'.format(epoch+1, loss, prec1))
+        print('Epoch: [{:02d}] [Average Loss:] {:.4f}\t [Train Acc.:] {:.2%}'.format(epoch+1, loss, prec1), end='')
         train_time += round(time.time() - start_train_time)
 
-        scheduler.step()
 
         if (epoch + 1) > args.start_eval and args.eval_freq > 0 and (epoch + 1) % args.eval_freq == 0 or (epoch + 1) == args.max_epoch:
-            print("=> Test")
+            # print("=> Test")
 
             for name in args.target_names:
-                print("Evaluating {} ...".format(name))
+                # print("Evaluating {} ...".format(name))
                 testloader = testloader_dict[name]['test']
 
                 test_set = dm.return_testdataset_by_name(name)
@@ -158,6 +157,7 @@ def main():
                     rank1 = test(model, test_set, name, testloader, use_gpu)
 
                 top1logger.write(name, epoch + 1, rank1)
+                scheduler.step(rank1)
 
             if use_gpu:
                 state_dict = model.module.state_dict()
@@ -199,12 +199,15 @@ def train(epoch, model, criterion, optimizer, trainloader, use_gpu, fixbase=Fals
         open_all_layers(model)
 
     end = time.time()
+    num_correct = 0
+    num_total = 0
     for batch_idx, (imgs, pids) in enumerate(trainloader):
         data_time.update(time.time() - end)
 
         if use_gpu:
             imgs, pids = imgs.cuda(), pids.cuda()
 
+        optimizer.zero_grad()
         outputs = model(imgs)
         if isinstance(outputs, (tuple, list)):
             loss = DeepSupervision(criterion, outputs, pids)
@@ -214,7 +217,6 @@ def train(epoch, model, criterion, optimizer, trainloader, use_gpu, fixbase=Fals
         prec, = accuracy(outputs.data, pids.data)
         prec1 = prec[0]  # get top 1
 
-        optimizer.zero_grad()
         loss.backward()
         optimizer.step()
 
@@ -222,6 +224,8 @@ def train(epoch, model, criterion, optimizer, trainloader, use_gpu, fixbase=Fals
 
         losses.update(loss.item(), pids.size(0))
         precisions.update(prec1, pids.size(0))
+        num_correct += prec1
+        num_total += imgs.size(0)
 
         if (batch_idx + 1) % args.print_freq == 0:
             print('Epoch: [{0:02d}][{1}/{2}]\t'
@@ -234,7 +238,7 @@ def train(epoch, model, criterion, optimizer, trainloader, use_gpu, fixbase=Fals
 
         end = time.time()
 
-    return losses.avg, precisions.avg
+    return losses.avg, num_correct / num_total
 
 
 def test(model, test_set, name, testloader, use_gpu, ranks=[1, 5], visualize=False):
@@ -243,7 +247,7 @@ def test(model, test_set, name, testloader, use_gpu, ranks=[1, 5], visualize=Fal
     model.eval()
 
     num_correct = 0
-    num_total = len(testloader)
+    num_total = 0
     with torch.no_grad():
         for batch_idx, (imgs, pids) in enumerate(testloader):
             if use_gpu:
@@ -257,16 +261,17 @@ def test(model, test_set, name, testloader, use_gpu, ranks=[1, 5], visualize=Fal
             prec1 = prec[0]  # get top 1
 
             num_correct += prec1
+            num_total += imgs.size(0)
 
-    top1 = num_correct / num_total
-    print("=> BatchTime(s)/BatchSize(img): {:.3f}/{}".format(batch_time.avg, args.test_batch_size))
+    top1 = 100 * num_correct / num_total
+    # print("=> BatchTime(s)/BatchSize(img): {:.3f}/{}".format(batch_time.avg, args.test_batch_size))
 
-    print("Results ----------")
-    print("top1: {:.2%}".format(top1))
+    # print("Results ----------")
+    print("\tTest Acc: {:.2f}%".format(top1))
     # print("CMC curve")
     # for r in ranks:
     #     print("Rank-{:<3}: {:.1%}".format(r, cmc[r-1]))
-    print("------------------")
+    # print("------------------")
 
     return top1
 
