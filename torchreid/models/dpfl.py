@@ -21,6 +21,7 @@ class DPFL(nn.Module):
                  loss,
                  scales=[1.0, 0.5],
                  dropout_p=0.001,
+                 pretrained=None,
                  **kwargs):
 
         super(DPFL, self).__init__()
@@ -34,13 +35,13 @@ class DPFL(nn.Module):
         self.scale10 = mobilenetv2ws(num_classes=num_classes,
                                 loss=loss,
                                 input_size=224,
-                                pretrained='imagenet',
+                                pretrained=pretrained,
                                 )
 
         self.scale05 = mobilenetv2ws(num_classes=num_classes,
                                 loss=loss,
                                 input_size=160,
-                                pretrained='imagenet',
+                                pretrained=pretrained,
                                 )
 
         self.scale10.feature_extract_mode = True

@@ -43,14 +43,21 @@ class VeRiType(BaseClassificationDataset):
             print("=> VeRi776 loaded")
             self.print_dataset_statistics(self.train, self.test)
 
-    def _process_xml(self, xml_path, label):
+    def _process_xml(self, xml_path, label, gather_classes=False):
         from lxml import etree
         tree = etree.parse(xml_path)
         root = tree.getroot()
         items = root.getchildren()[0]
 
         if label == 'type':
-            train = [ (osp.join(self.train_dir, item.attrib['imageName']), int(item.attrib['typeID']) ) for item in items]
+            def select_classes(c):
+                type_dict = {1:1, 2:2, 3:3, 4:4, 5:3, 6:5, 7:6, 8:7, 9:1}
+                return type_dict[c]
+            if gather_classes:
+                train = [ (osp.join(self.train_dir, item.attrib['imageName']), select_classes(int(item.attrib['typeID'])) ) for item in items]
+            else:
+
+                train = [ (osp.join(self.train_dir, item.attrib['imageName']), int(item.attrib['typeID']) ) for item in items]
 
         return train
 
