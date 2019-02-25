@@ -157,22 +157,14 @@ class VeRi776(BaseImageDataset):
                 row = keypoints_f[keypoints_f[0] == 'VeRi/image_train/'+img_name]
                 if len(row) == 0:
                     orient = 0
-                    landmarks = np.zeros(20)
+                    landmarks = np.ones(20)*-1
                 else:
                     row = row.iloc[0]
                     orient = row[41]
-
-                    # TODO get this to work instead
-                    # landmarks = np.array([min(0,int(x))+1 for x in row[list(range(1,len(row)-1,2))]]) 
-                    if self.regress_landmarks:
-                        # TODO these need to be normalised according to the image resizing
-                        landmarks = np.array(row[1:41])
-                    else:
-                        landmarks = np.zeros(20)
-                        for i in range(20):
-                            if int(row[2*i+1]) > -1:
-                                landmarks[i] = 1
-
+                    # Whether or not we're regressing landmarks, at this point we need to know
+                    # the locations so that we can remove them if cropping results in this.
+                    landmarks = np.array(row[1:41])
+                    
                 dataset.append((img_path, pid, camid, orient, landmarks))
             else:
                 dataset.append((img_path, pid, camid))
