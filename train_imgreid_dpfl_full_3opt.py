@@ -85,9 +85,24 @@ def main():
     print("Model size: {:.3f} M".format(count_num_param(model)))
     # print(model)
 
+    # optim for each part
+    def get_params_by_name(model, layers):
+        params = []
+        for name, module in model.named_children():
+            if name in layers:
+                params.extend(list(module.parameters()))
+        print(len(params))
+        return params
+
+    optim2layers = {'large': ['branch_large', 'fc_large'], 'small': ['fc_small', 'branch_small'], 'joint':['fc_joint']}
+    optims = {}
+    for optim, layers in optim2layers.items():
+        optims[optim] = init_optimizer(get_params_by_name(model, layers), **optimizer_kwargs(args))
+    optimizer = optims
+
     criterion = CrossEntropyLoss(num_classes=dm.num_train_pids, use_gpu=use_gpu, label_smooth=args.label_smooth)
-    optimizer = init_optimizer(model.parameters(), **optimizer_kwargs(args))
-    scheduler = lr_scheduler.MultiStepLR(optimizer, milestones=args.stepsize, gamma=args.gamma)
+    # optimizer = init_optimizer(model.parameters(), **optimizer_kwargs(args))
+    # scheduler = lr_scheduler.MultiStepLR(optimizer, milestones=args.stepsize, gamma=args.gamma)
     # # scheduler = lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.1, patience=3, verbose=True, threshold=1e-04)
 
     if args.load_weights and check_isfile(args.load_weights): # load pretrained weights but ignore layers that don't match in size
@@ -158,7 +173,7 @@ def main():
         print('Epoch: [{:02d}] [Average Loss:] {:.4f}\t [Average Prec.:] {:.2%}'.format(epoch+1, loss, prec1))
         train_time += round(time.time() - start_train_time)
 
-        scheduler.step()
+        # scheduler.step()
 
         if (epoch + 1) > args.start_eval and args.eval_freq > 0 and (epoch + 1) % args.eval_freq == 0 or (epoch + 1) == args.max_epoch:
             print("=> Test")
@@ -246,16 +261,20 @@ def train(epoch, model, criterion, optimizer, trainloader, writer, use_gpu, fixb
         prec, = accuracy(y_joint.data, pids.data)
         prec1 = prec[0]  # get top 1
 
-        optimizer.zero_grad()
+        # optimizer.zero_grad()
+        for opt in optimizer.values():
+            opt.zero_grad()
 
-        # total_loss_large.backward(retain_graph=True)
-        # total_loss_small.backward(retain_graph=True)
-        # total_loss_joint.backward()
+        total_loss_large.backward(retain_graph=True)
+        total_loss_small.backward(retain_graph=True)
+        total_loss_joint.backward()
         # sum losses
-        loss = total_loss_joint + total_loss_small + total_loss_large
-        loss.backward()
+        # loss = total_loss_joint + total_loss_small + total_loss_large
+        # loss.backward()
 
-        optimizer.step()
+        # optimizer.step()
+        for opt in optimizer.values():
+            opt.step()
 
         batch_time.update(time.time() - end)
         writer.add_scalar('iter/loss_small', loss_small, epoch*epoch_iterations+batch_idx)
@@ -266,10 +285,9 @@ def train(epoch, model, criterion, optimizer, trainloader, writer, use_gpu, fixb
         writer.add_scalar('iter/total_loss_small', total_loss_small, epoch*epoch_iterations+batch_idx)
         writer.add_scalar('iter/total_loss_large', total_loss_large, epoch*epoch_iterations+batch_idx)
         writer.add_scalar('iter/total_loss_joint', total_loss_joint, epoch*epoch_iterations+batch_idx)
-        writer.add_scalar('iter/loss', loss, epoch*epoch_iterations+batch_idx)
 
 
-        losses.update(loss.item(), pids.size(0))
+        losses.update(total_loss_joint.item(), pids.size(0))
         precisions.update(prec1, pids.size(0))
 
         if (batch_idx + 1) % args.print_freq == 0:
