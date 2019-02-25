@@ -18,11 +18,13 @@ class Random2DTranslation(object):
     - width (int): target image width.
     - p (float): probability of performing this transformation. Default: 0.5.
     """
-    def __init__(self, height, width, p=0.5, interpolation=Image.BILINEAR):
+    def __init__(self, height, width, p=0.5, interpolation=Image.BILINEAR, return_trans=False):
         self.height = height
         self.width = width
+        self.resize_ratio = 1.125
         self.p = p
         self.interpolation = interpolation
+        self.return_trans = return_trans
 
     def __call__(self, img):
         """
@@ -30,19 +32,86 @@ class Random2DTranslation(object):
         - img (PIL Image): Image to be cropped.
         """
         if random.uniform(0, 1) > self.p:
-            return img.resize((self.width, self.height), self.interpolation)
+            if self.return_trans:
+                return img.resize((self.width, self.height), self.interpolation), 0, 0
+            else:
+                return img.resize((self.width, self.height), self.interpolation)
         
-        new_width, new_height = int(round(self.width * 1.125)), int(round(self.height * 1.125))
+        new_width, new_height = int(round(self.width * self.resize_ratio)), int(round(self.height * self.resize_ratio))
         resized_img = img.resize((new_width, new_height), self.interpolation)
         x_maxrange = new_width - self.width
         y_maxrange = new_height - self.height
         x1 = int(round(random.uniform(0, x_maxrange)))
         y1 = int(round(random.uniform(0, y_maxrange)))
         croped_img = resized_img.crop((x1, y1, x1 + self.width, y1 + self.height))
-        return croped_img
+        if self.return_trans:
+            return croped_img, x1, y1
+        else:
+            return croped_img
 
+class RandomHorizontalFlipReturn(object):
+    """Horizontally flip the given PIL Image randomly with a given probability 
+    and return the image (flipped or not) with whether the flipping happened
 
-def build_transforms(height, width, is_train, **kwargs):
+    Args:
+        p (float): probability of the image being flipped. Default value is 0.5
+    """
+
+    def __init__(self, p=0.5):
+        self.p = p
+
+    def __call__(self, img):
+        """
+        Args:
+            img (PIL Image): Image to be flipped.
+
+        Returns:
+            PIL Image: Randomly flipped image.
+        """
+        if random.random() < self.p:
+            return functional.hflip(img), True
+        return img, False
+
+    def __repr__(self):
+        return self.__class__.__name__ + '(p={})'.format(self.p)
+
+class ComposeReturn(object):
+    """Composes several transforms together.
+
+    Args:
+        transforms (list of ``Transform`` objects): list of transforms to compose.
+
+    Example:
+        >>> transforms.Compose([
+        >>>     transforms.CenterCrop(10),
+        >>>     transforms.ToTensor(),
+        >>> ])
+    """
+
+    def __init__(self, transforms):
+        self.transforms = transforms
+
+    def __call__(self, img):
+        returns = ()
+        for t in self.transforms:
+            r_t = t(img)
+            if isinstance(r_t, tuple):
+                img = r_t[0]
+                if len(r_t) > 1:
+                    returns = returns + r_t[1:]
+            else:
+                img = r_t
+        return img, returns
+
+    def __repr__(self):
+        format_string = self.__class__.__name__ + '('
+        for t in self.transforms:
+            format_string += '\n'
+            format_string += '    {0}'.format(t)
+        format_string += '\n)'
+        return format_string
+    
+def build_transforms(height, width, is_train, return_trans=False, **kwargs):
     """Build transforms
 
     Args:
@@ -59,14 +128,21 @@ def build_transforms(height, width, is_train, **kwargs):
     transforms = []
 
     if is_train:
-        transforms += [Random2DTranslation(height, width)]
-        transforms += [RandomHorizontalFlip()]
+        if return_trans:
+            transforms += [Random2DTranslation(height, width, return_trans=True)]
+            transforms += [RandomHorizontalFlipReturn()]
+        else:
+            transforms += [Random2DTranslation(height, width)]
+            transforms += [RandomHorizontalFlip()]
     else:
         transforms += [Resize((height, width))]
     
     transforms += [ToTensor()]
     transforms += [normalize]
 
-    transforms = Compose(transforms)
+    if return_trans:
+        transforms = ComposeReturn(transforms)
+    else:
+        transforms = Compose(transforms)
 
     return transforms
