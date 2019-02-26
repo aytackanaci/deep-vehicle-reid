@@ -18,10 +18,10 @@ class Random2DTranslation(object):
     - width (int): target image width.
     - p (float): probability of performing this transformation. Default: 0.5.
     """
-    def __init__(self, height, width, p=0.5, interpolation=Image.BILINEAR, return_trans=False):
+    def __init__(self, height, width, p=0.5, resize_ratio=1.125, interpolation=Image.BILINEAR, return_trans=False):
         self.height = height
         self.width = width
-        self.resize_ratio = 1.125
+        self.resize_ratio = resize_ratio
         self.p = p
         self.interpolation = interpolation
         self.return_trans = return_trans
@@ -88,8 +88,11 @@ class ComposeReturn(object):
         >>> ])
     """
 
-    def __init__(self, transforms):
+    def __init__(self, transforms, height, width, resize_ratio=1.125):
         self.transforms = transforms
+        self.height = height
+        self.width = width
+        self.resize_ratio = resize_ratio
 
     def __call__(self, img):
         returns = ()
@@ -125,11 +128,13 @@ def build_transforms(height, width, is_train, return_trans=False, **kwargs):
     imagenet_std = [0.229, 0.224, 0.225]
     normalize = Normalize(mean=imagenet_mean, std=imagenet_std)
 
+    resize_ratio=1.125
+    
     transforms = []
 
     if is_train:
         if return_trans:
-            transforms += [Random2DTranslation(height, width, return_trans=True)]
+            transforms += [Random2DTranslation(height, width, return_trans=True, resize_ratio=resize_ratio)]
             transforms += [RandomHorizontalFlipReturn()]
         else:
             transforms += [Random2DTranslation(height, width)]
@@ -141,7 +146,7 @@ def build_transforms(height, width, is_train, return_trans=False, **kwargs):
     transforms += [normalize]
 
     if return_trans:
-        transforms = ComposeReturn(transforms)
+        transforms = ComposeReturn(transforms, height, width, resize_ratio=resize_ratio)
     else:
         transforms = Compose(transforms)
 
