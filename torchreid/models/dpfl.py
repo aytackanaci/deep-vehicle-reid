@@ -8,8 +8,7 @@ import torchvision
 import torch.utils.model_zoo as model_zoo
 from torch.nn import init
 
-from .mobilenetv2_pre import mobilenetv2ws
-from .mobilenetv1 import mobilenetv1
+from .mobilenetv2_pre import mobilenetv2ws, MobileNetV2wS
 
 __all__ = ['dpfl']
 
@@ -20,7 +19,7 @@ class DPFL(nn.Module):
 
     def __init__(self, num_classes,
                  loss,
-                 input_dims=[224, 160],
+                 scales=[1.0, 0.5],
                  dropout_p=0.001,
                  **kwargs):
 
@@ -32,31 +31,31 @@ class DPFL(nn.Module):
 
         #scale 1.0
 
-        self.scale_large = mobilenetv1(num_classes=num_classes,
+        self.branch_large = mobilenetv2ws(num_classes=num_classes,
                                 loss=loss,
-                                input_size=input_dims[0],
+                                input_size=224,
                                 pretrained='imagenet',
                                 )
 
-        self.scale_small = mobilenetv1(num_classes=num_classes,
+        self.branch_small = mobilenetv2ws(num_classes=num_classes,
                                 loss=loss,
-                                input_size=input_dims[1],
+                                input_size=160,
                                 pretrained='imagenet',
                                 )
 
-        self.scale_large.feature_extract_mode = True
-        self.scale_small.feature_extract_mode = True
+        self.branch_large.feature_extract_mode = True
+        self.branch_small.feature_extract_mode = True
 
         self.dropout_small = nn.Dropout(p=dropout_p, inplace=True)
         self.dropout_large = nn.Dropout(p=dropout_p, inplace=True)
-        self.dropout_consensus = nn.Dropout(p=dropout_p, inplace=True)
+        self.dropout_joint = nn.Dropout(p=dropout_p, inplace=True)
 
 
-        self.fc_large = nn.Linear(self.scale_large.last_conv_out_ch, self.num_classes)
-        self.fc_small = nn.Linear(self.scale_small.last_conv_out_ch, self.num_classes)
+        self.fc_large = nn.Linear(self.branch_large.last_conv_out_ch, self.num_classes)
+        self.fc_small = nn.Linear(self.branch_small.last_conv_out_ch, self.num_classes)
 
-        self.fc_consensus = nn.Linear(
-                self.scale_large.last_conv_out_ch + self.scale_small.last_conv_out_ch,
+        self.fc_joint = nn.Linear(
+                self.branch_large.last_conv_out_ch + self.branch_small.last_conv_out_ch,
                 self.num_classes)
 
         # self.fc_consensus = self._construct_fc_layer(
@@ -108,29 +107,29 @@ class DPFL(nn.Module):
                 if m.bias is not None:
                     init.constant_(m.bias, 0)
 
-    def forward(self, x_small, x_large):
+    def forward(self, x_large, x_small):
 
-        f_large = self.scale_large(x_small)
-        f_small = self.scale_small(x_large)
+        f_large = self.branch_large(x_large)
+        f_small = self.branch_small(x_small)
 
         f_large = self.dropout_large(f_large)
         f_small = self.dropout_small(f_small)
 
-        y10 = self.fc_large(f_large)
-        y05 = self.fc_small(f_small)
+        y_large = self.fc_large(f_large)
+        y_small = self.fc_small(f_small)
 
         f_fusion = torch.cat([f_large, f_small], 1)
-        f_fusion = self.dropout_consensus(f_fusion)
+        f_fusion = self.dropout_joint(f_fusion)
 
         if not self.training:
             return f_fusion
 
-        y_concensus = self.fc_consensus(f_fusion)
+        y_joint = self.fc_joint(f_fusion)
 
         if self.loss == {'xent'}:
-            return y10, y05, y_concensus
+            return y_large, y_small, y_joint
         elif self.loss == {'xent', 'htri'}:
-            return y10, y05, y_concensus, f_fusion
+            return y_large, y_small, y_joint, f_fusion
         else:
             raise KeyError("Unsupported loss: {}".format(self.loss))
 

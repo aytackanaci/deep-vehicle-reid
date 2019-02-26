@@ -55,6 +55,7 @@ class ImageDataManager(BaseDataManager):
                  cuhk03_labeled=False, # use cuhk03's labeled or detected images
                  cuhk03_classic_split=False, # use cuhk03's classic split or 767/700 split
                  aic19_manual_labels=False,
+                 vehicleid_test_size='',
                  scales=None
                  ):
         super(ImageDataManager, self).__init__()
@@ -74,6 +75,7 @@ class ImageDataManager(BaseDataManager):
         self.cuhk03_labeled = cuhk03_labeled
         self.cuhk03_classic_split = cuhk03_classic_split
         self.aic19_manual_labels = aic19_manual_labels
+        self.vehicleid_test_size = vehicleid_test_size
 
         # Build train and test transform functions
         if scales is None:
@@ -130,7 +132,7 @@ class ImageDataManager(BaseDataManager):
         for name in self.target_names:
             dataset = init_imgreid_dataset(
                 root=self.root, name=name, split_id=self.split_id, cuhk03_labeled=self.cuhk03_labeled,
-                cuhk03_classic_split=self.cuhk03_classic_split, aic19_manual_labels=self.aic19_manual_labels, val=self.val,
+                cuhk03_classic_split=self.cuhk03_classic_split, aic19_manual_labels=self.aic19_manual_labels, val=self.val, vehicleid_test_size=self.vehicleid_test_size,
             )
 
             if scales is None:

@@ -51,6 +51,8 @@ def argument_parser():
                         help="use cuhk03's metric for evaluation")
     parser.add_argument('--aic19-manual-labels', action='store_true',
                         help="use manually labeled querys")
+    parser.add_argument('--vehicleid-test-size', type=str, default='large',
+                        help="Gallery test size for VehicleID")
 
     # ************************************************************
     # Optimization options
@@ -89,7 +91,7 @@ def argument_parser():
     parser.add_argument('--gamma', default=0.1, type=float,
                         help="learning rate decay")
 
-    parser.add_argument('--train-batch-size', default=16, type=int,
+    parser.add_argument('--train-batch-size', default=8, type=int,
                         help="training batch size")
     parser.add_argument('--test-batch-size', default=100, type=int,
                         help="test batch size")
@@ -181,6 +183,7 @@ def image_dataset_kwargs(parsed_args):
         'cuhk03_labeled': parsed_args.cuhk03_labeled,
         'cuhk03_classic_split': parsed_args.cuhk03_classic_split,
         'aic19_manual_labels': parsed_args.aic19_manual_labels,
+        'vehicleid_test_size': parsed_args.vehicleid_test_size,
         'val': parsed_args.val,
     }
 
