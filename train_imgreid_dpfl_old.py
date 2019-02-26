@@ -11,7 +11,6 @@ import numpy as np
 import torch
 import torch.nn as nn
 import torch.backends.cudnn as cudnn
-from torch.nn import functional as F
 from torch.optim import lr_scheduler
 
 from tensorboardX import SummaryWriter
@@ -52,6 +51,7 @@ def exp_name(cfg):
 # read config
 parser = argument_parser()
 args = parser.parse_args()
+args.start_eval = args.max_epoch - 20-1
 args.fixbase_epoch = 0
 args.arch = 'dpfl'
 args.save_dir = exp_name(args)
@@ -82,12 +82,12 @@ def main():
     print("Initializing model: {}".format(args.arch))
     model = models.init_model(name=args.arch, num_classes=dm.num_train_pids, input_size=args.width, loss={'xent'}, use_gpu=use_gpu)
     print("Model size: {:.3f} M".format(count_num_param(model)))
-    # print(model)
+    print(model)
 
     criterion = CrossEntropyLoss(num_classes=dm.num_train_pids, use_gpu=use_gpu, label_smooth=args.label_smooth)
     optimizer = init_optimizer(model.parameters(), **optimizer_kwargs(args))
     scheduler = lr_scheduler.MultiStepLR(optimizer, milestones=args.stepsize, gamma=args.gamma)
-    # # scheduler = lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.1, patience=3, verbose=True, threshold=1e-04)
+    # scheduler = lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.1, patience=3, verbose=True, threshold=1e-04)
 
     if args.load_weights and check_isfile(args.load_weights): # load pretrained weights but ignore layers that don't match in size
         checkpoint = torch.load(args.load_weights)
@@ -127,7 +127,7 @@ def main():
 
 
     # Tensorboard
-    writer = SummaryWriter(log_dir=osp.join('runs', args.save_dir))
+    writer = SummaryWriter(log_dir=osp.join('runs', 'tensorboard'))
     print("=> Start training")
 
 
@@ -228,47 +228,29 @@ def train(epoch, model, criterion, optimizer, trainloader, writer, use_gpu, fixb
         if use_gpu:
             img1, img2, pids = img1.cuda(), img2.cuda(), pids.cuda()
 
-        y_large, y_small, y_joint = model(img1, img2)
+        y10, y05, y_consensus = model(img1, img2)
 
-        loss_large = criterion(y_large, pids)
-        loss_small = criterion(y_small, pids)
-        loss_joint = criterion(y_joint, pids)
+        loss10 = criterion(y10, pids)
+        loss05 = criterion(y05, pids)
+        loss_consensus = criterion(y_consensus, pids)
 
-        joint_prob = F.softmax(y_joint, dim=1)
-        loss_joint_large = criterion(y_large, joint_prob, one_hot=True)
-        loss_joint_small = criterion(y_small, joint_prob, one_hot=True)
-
-        total_loss_large = loss_large + loss_joint_large #+
-        total_loss_small = loss_small + loss_joint_small #+
-        total_loss_joint = loss_joint #+
-
-        prec, = accuracy(y_joint.data, pids.data)
+        prec, = accuracy(y_consensus.data, pids.data)
         prec1 = prec[0]  # get top 1
+
+        writer.add_scalar('iter/loss', loss_consensus, epoch*epoch_iterations+batch_idx)
+        writer.add_scalar('iter/prec1', prec1, epoch*epoch_iterations+batch_idx)
 
         optimizer.zero_grad()
 
-        # total_loss_large.backward(retain_graph=True)
-        # total_loss_small.backward(retain_graph=True)
-        # total_loss_joint.backward()
-        # sum losses
-        loss = total_loss_joint + total_loss_small + total_loss_large
-        loss.backward()
+        loss10.backward(retain_graph=True)
+        loss05.backward(retain_graph=True)
+        loss_consensus.backward()
 
         optimizer.step()
 
         batch_time.update(time.time() - end)
-        writer.add_scalar('iter/loss_small', loss_small, epoch*epoch_iterations+batch_idx)
-        writer.add_scalar('iter/loss_large', loss_large, epoch*epoch_iterations+batch_idx)
-        writer.add_scalar('iter/loss_joint', loss_joint, epoch*epoch_iterations+batch_idx)
-        writer.add_scalar('iter/loss_joint_small', loss_joint_small, epoch*epoch_iterations+batch_idx)
-        writer.add_scalar('iter/loss_joint_large', loss_joint_large, epoch*epoch_iterations+batch_idx)
-        writer.add_scalar('iter/total_loss_small', total_loss_small, epoch*epoch_iterations+batch_idx)
-        writer.add_scalar('iter/total_loss_large', total_loss_large, epoch*epoch_iterations+batch_idx)
-        writer.add_scalar('iter/total_loss_joint', total_loss_joint, epoch*epoch_iterations+batch_idx)
-        writer.add_scalar('iter/loss', loss, epoch*epoch_iterations+batch_idx)
 
-
-        losses.update(loss.item(), pids.size(0))
+        losses.update(loss_consensus.item(), pids.size(0))
         precisions.update(prec1, pids.size(0))
 
         if (batch_idx + 1) % args.print_freq == 0:
