@@ -36,8 +36,6 @@ class MPFL(nn.Module):
         self.num_classes = num_classes
         self.num_orients = num_orients
         self.num_landmarks = num_landmarks
-        if regress_landmarks:
-            self.num_landmarks *= 2
 
         self.dropout_p = dropout_p
 

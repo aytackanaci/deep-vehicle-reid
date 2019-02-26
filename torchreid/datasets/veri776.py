@@ -56,9 +56,9 @@ class VeRi776(BaseImageDataset):
             keypoints_gallery=None
 
             
-        train = self._process_dir(self.train_dir, relabel=True, keypoints=keypoints_train)
-        query = self._process_dir(self.query_dir, relabel=False, keypoints=keypoints_query)
-        gallery = self._process_dir(self.gallery_dir, relabel=False, keypoints=keypoints_gallery)
+        train = self._process_dir(self.train_dir, relabel=True, keypoints=keypoints_train, kp_data_type='train')
+        query = self._process_dir(self.query_dir, relabel=False, keypoints=keypoints_query, kp_data_type='test')
+        gallery = self._process_dir(self.gallery_dir, relabel=False, keypoints=keypoints_gallery, kp_data_type='test')
 
         self.train = train
         self.query = query
@@ -77,6 +77,11 @@ class VeRi776(BaseImageDataset):
             self.num_query_orients, self.num_query_landmarks = query_info[3:5]
             self.num_gallery_orients, self.num_gallery_landmarks = gallery_info[3:5]
 
+        if not self.regress_landmarks:
+            self.num_train_landmarks = int(self.num_train_landmarks/2)
+            self.num_query_landmarks = int(self.num_query_landmarks/2)
+            self.num_gallery_landmarks = int(self.num_gallery_landmarks/2)
+            
         if verbose:
             print("=> VeRi776 loaded")
             self.print_dataset_statistics(train, query, gallery)
@@ -126,7 +131,7 @@ class VeRi776(BaseImageDataset):
             raise RuntimeError("'{}' is not available".format(self.gallery_dir))
 
 
-    def _process_dir(self, dir_path, relabel=False, keypoints=None):
+    def _process_dir(self, dir_path, relabel=False, keypoints=None, kp_data_type='train'):
         img_paths = glob.glob(osp.join(dir_path, '*.jpg'))
         pattern = re.compile(r'([-\d]+)_c(\d\d\d)')
 
@@ -154,10 +159,10 @@ class VeRi776(BaseImageDataset):
 
             if keypoints:
                 img_name = kp_image_pat.match(img_path).group(1)
-                row = keypoints_f[keypoints_f[0] == 'VeRi/image_train/'+img_name]
+                row = keypoints_f[keypoints_f[0] == 'VeRi/image_'+kp_data_type+'/'+img_name]
                 if len(row) == 0:
-                    orient = 0
-                    landmarks = np.ones(20)*-1
+                    # Entry not found, omit from dataset.
+                    continue
                 else:
                     row = row.iloc[0]
                     orient = row[41]
@@ -165,8 +170,8 @@ class VeRi776(BaseImageDataset):
                     # the locations so that we can remove them if cropping results in this.
                     landmarks = np.array(row[1:41])
                     
-                dataset.append((img_path, pid, camid, orient, landmarks))
+                    dataset.append((img_path, pid, camid, orient, landmarks))
             else:
                 dataset.append((img_path, pid, camid))
-        
+
         return dataset
