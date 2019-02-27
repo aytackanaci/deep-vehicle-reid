@@ -16,6 +16,7 @@ from .veri776 import VeRi776
 from .aic19_track2 import Aic19Track2
 from .pku_vehicle_id import VehicleID
 from .boxcars21k import Boxcars21k
+from .compcars_sv_reid import CompcarsSurvReid
 
 from .mars import Mars
 from .ilidsvid import iLIDSVID
@@ -28,6 +29,7 @@ __imgreid_factory = {
     'vehicleID': VehicleID,
     'aic19track2': Aic19Track2,
     'boxcars21k': Boxcars21k,
+    'compcars_reid': CompcarsSurvReid,
     'market1501': Market1501,
     'cuhk03': CUHK03,
     'dukemtmcreid': DukeMTMCreID,
