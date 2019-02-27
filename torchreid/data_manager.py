@@ -98,7 +98,7 @@ class ImageDataManager(BaseDataManager):
         # Build train and test transform functions
         if scales is None:
             transform_train = build_transforms(self.height, self.width, is_train=True)
-            transform_train_lm = build_transforms(self.height, self.width, is_train=True, return_trans=True)
+            transform_train_lm = build_transforms(self.height, self.width, is_train=True, inc_orient_lm=True)
             transform_test = build_transforms(self.height, self.width, is_train=False)
         else:
             transform_train = [build_transforms(scale, scale, is_train=True) for scale in scales]

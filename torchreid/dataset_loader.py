@@ -27,36 +27,6 @@ def read_image(img_path):
             pass
     return img
 
-def transform_orient(orient, flip):
-    if not flip:
-        return orient
-    else:
-        if orient < 2:
-            return orient
-        if orient < 5:
-            return (orient+3)
-        else:
-            return (orient-3)
-
-def transform_landmarks(landmarks, im_size, transform, x_start, y_start, regress_landmarks):
-    landmarks_t = landmarks
-    landmarks_t[range(0,len(landmarks),2)] = landmarks[range(0,len(landmarks),2)]/im_size[0]*transform.width*transform.resize_ratio
-    landmarks_t[range(1,len(landmarks)+1,2)] = landmarks[range(1,len(landmarks)+1,2)]/im_size[1]*transform.height*transform.resize_ratio
-    
-    for idx in range(0,len(landmarks_t),2):
-        l_x = landmarks_t[idx]
-        l_y = landmarks_t[idx+1]
-        if landmarks[idx] == -1 or \
-           l_x < x_start or l_y < y_start or \
-           l_x > (x_start+transform.width) or l_y > (y_start+transform.height):
-            landmarks_t[idx:idx+2] = 0
-
-    if regress_landmarks:
-        return landmarks_t
-    else:
-        return np.array(list(map(lambda x: 1 if x>0 else 0, landmarks_t[range(0,len(landmarks_t),2)])))
-
-
 class MultiScaleImageDataset(Dataset):
     """Image Person ReID Dataset"""
     def __init__(self, dataset, transforms=None):
@@ -124,20 +94,13 @@ class ImageLandmarksDataset(Dataset):
         return len(self.dataset)
 
     def __getitem__(self, index):
-        data = self.dataset[index]
-        img_path, pid, camid = data[0:3]
+        img_path, pid, camid, orient, landmarks = self.dataset[index]
         img = read_image(img_path)
         im_size = img.size
         
         if self.transform is not None:
-            img, returns = self.transform(img)
-            x, y, flip = returns
-        else:
-            x, y, flip = 0, 0, False
+            img, orient, landmarks = self.transform((img, orient, landmarks))
             
-        orient, landmarks = data[3:5]
-        orient = transform_orient(orient, flip)
-        landmarks = transform_landmarks(landmarks, im_size, self.transform, x, y, self.regress_landmarks)
         return img, pid, camid, orient, landmarks, img_path
         
 class VideoDataset(Dataset):
