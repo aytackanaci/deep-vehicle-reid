@@ -148,13 +148,12 @@ class MPFL(nn.Module):
         y_landmarks_id = self.fc_landmarks_id(f_landmarks)
         
         f_fusion = f_id
-        #print(f_fusion)
+
         if self.train_orient:
             f_fusion = torch.cat([f_fusion, f_orient], 1)
         if self.train_landmarks:
             f_fusion = torch.cat([f_fusion, f_landmarks], 1)
-        #print(f_fusion)
-#        f_fusion = torch.cat(f_fusion, 1)
+
         f_fusion = self.dropout_consensus(f_fusion)
 
         if not self.training:
