@@ -174,8 +174,8 @@ def main():
                 else:
                     rank1, mAP = test(model, test_set, name, queryloader, galleryloader, use_gpu)
 
-                writer.add_scalar('test/top1', rank1, epoch+1)
-                writer.add_scalar('test/mAP', mAP, epoch+1)
+                writer.add_scalar(name + '_test/top1', rank1, epoch+1)
+                writer.add_scalar(name + '_test/mAP', mAP, epoch+1)
 
                 ranklogger.write(name, epoch + 1, rank1)
                 maplogger.write(name, epoch + 1, mAP)
