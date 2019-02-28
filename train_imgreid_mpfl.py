@@ -27,7 +27,7 @@ from torchreid.utils.generaltools import set_random_seed
 from torchreid.eval_metrics import evaluate, accuracy
 from torchreid.optimizers import init_optimizer
 
-def exp_name(cfg, train_o, train_l):
+def exp_name(cfg, train_o, train_l, dropout):
     name = [
         'e_' + cfg.prefix,
         'S_' + '-'.join(cfg.source_names),
@@ -43,6 +43,7 @@ def exp_name(cfg, train_o, train_l):
         cfg.optim,
         'lr' + str(cfg.lr),
         'wd' + str(cfg.weight_decay),
+        'do' + str(dropout),
         'orient' + str(train_o),
         'landmarks' + str(train_l),
         'lmRegress' if cfg.regress_landmarks else 'lmClass'
@@ -62,6 +63,8 @@ def main():
     args = parser.parse_args()
     args.fixbase_epoch = 0
     args.arch = 'mpfl'
+
+    dropout = 0.001
     
     if args.use_landmarks_only and args.use_orient_only:
         print('Error: Only one of --use_orient_only or --use_landmarks_only can be selected.')
@@ -74,7 +77,7 @@ def main():
         print('Training only ID and landmark branches')
         train_orient=False
         
-    args.save_dir = exp_name(args, train_orient, train_landmarks)
+    args.save_dir = exp_name(args, train_orient, train_landmarks, dropout)
 
     set_random_seed(args.seed)
     if not args.use_avai_gpus: os.environ['CUDA_VISIBLE_DEVICES'] = args.gpu_devices
@@ -99,7 +102,7 @@ def main():
         print('Warning: landmarks train loader not given, only id labels will be used for training')
 
     print("Initializing model: {}".format(args.arch))
-    model = models.init_model(name=args.arch, num_classes=dm.num_train_pids, num_orients=dm.num_train_orients, num_landmarks=dm.num_train_landmarks, input_size=args.width, loss={'xent'}, use_gpu=use_gpu, train_orient=train_orient, train_landmarks=train_landmarks, regress_lm=args.regress_landmarks)
+    model = models.init_model(name=args.arch, num_classes=dm.num_train_pids, num_orients=dm.num_train_orients, num_landmarks=dm.num_train_landmarks, input_size=args.width, loss={'xent'}, use_gpu=use_gpu, train_orient=train_orient, train_landmarks=train_landmarks, regress_landmarks=args.regress_landmarks, dropout=dropout)
     print("Model size: {:.3f} M".format(count_num_param(model)))
     print(model)
 
@@ -269,42 +272,47 @@ def train(epoch, model, criterion, optimizer, trainloader, use_gpu, fixbase=Fals
             loss_consensus_orient = criterion['id_soft'](y_orient_id, consensus_prob)
             loss_consensus_landmarks = criterion['id_soft'](y_landmarks_id, consensus_prob)
 
-        loss_consensus = criterion['id'](y_consensus, pids)
+        loss_consensus_labels = criterion['id'](y_consensus, pids)
 
         prec, = accuracy(y_consensus.data, pids.data)
         prec1 = prec[0]  # get top 1
         
         optimizer.zero_grad()
 
-        # Propagate back all the losses for all label types
-
-        # Individual branch losses according to labels
-        loss_id.backward(retain_graph=True)
-        if train_orient:
-            if update_lmo:
-                loss_orient.backward(retain_graph=True)
-            loss_orient_id.backward(retain_graph=True)
-        if train_landmarks:
-            if update_lmo:
-                loss_landmarks.backward(retain_graph=True)
-            loss_landmarks_id.backward(retain_graph=True)
-
-        # Feedback loss according to consensus
+        # Individual branch losses
+        total_loss = loss_id
         if feedback_consensus:
-            if train_orient:
-                loss_consensus_orient.backward(retain_graph=True)
-            if train_landmarks:
-                loss_consensus_landmarks.backward(retain_graph=True)
-            loss_consensus_id.backward(retain_graph=True)
+            total_loss += loss_consensus_id
 
+        if train_orient:
+            total_loss_orient = loss_orient_id
+            if update_lmo:
+                total_loss_orient += loss_orient
+            if feedback_consensus:
+                total_loss_orient += loss_consensus_orient
+
+            total_loss += total_loss_orient
+            
+        if train_landmarks:
+            total_loss_landmarks = loss_landmarks_id
+            if update_lmo:
+                total_loss_landmarks += loss_landmarks
+            if feedback_consensus:
+                total_loss_landmarks += loss_consensus_landmarks
+
+            total_loss += total_loss_landmarks
+            
         # Consensus loss according to labels
-        loss_consensus.backward()
+        total_loss += loss_consensus_labels
 
+        # Now propagate back all losses
+        total_loss.backward()
+        
         optimizer.step()
 
         batch_time.update(time.time() - end)
 
-        losses.update(loss_consensus.item(), pids.size(0))
+        losses.update(total_loss.item(), pids.size(0))
         precisions.update(prec1, pids.size(0))
 
         if (batch_idx + 1) % args.print_freq == 0:
