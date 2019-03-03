@@ -82,7 +82,7 @@ def argument_parser():
     # ************************************************************
     # Training hyperparameters
     # ************************************************************
-    parser.add_argument('--max-epoch', default=60, type=int,
+    parser.add_argument('--max-epoch', default=50, type=int,
                         help="maximum epochs to run")
     parser.add_argument('--start-epoch', default=0, type=int,
                         help="manual epoch number (useful when restart)")
@@ -91,7 +91,9 @@ def argument_parser():
     parser.add_argument('--gamma', default=0.1, type=float,
                         help="learning rate decay")
 
-    parser.add_argument('--train-batch-size', default=8, type=int,
+    parser.add_argument('--train-batch-size', default=128, type=int,
+                        help="training batch size")
+    parser.add_argument('--train-loss-batch-size', default=8, type=int,
                         help="training batch size")
     parser.add_argument('--test-batch-size', default=100, type=int,
                         help="test batch size")
