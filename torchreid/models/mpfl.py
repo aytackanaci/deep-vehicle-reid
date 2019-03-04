@@ -37,6 +37,11 @@ class MPFL(nn.Module):
         self.num_orients = num_orients
         self.num_landmarks = num_landmarks
 
+        if self.train_orient and self.num_orients <= 1:
+            print('Error! Require more than one orient to train model with orient branch')
+        if self.train_landmarks and self.num_landmarks == 0:
+            print('Error! Require at least one landmark to train model with landmarks branch')
+    
         self.dropout_p = dropout_p
 
         print('Model created with num pids:',self.num_classes,'num orients:',self.num_orients,'num_landmarks:',self.num_landmarks)
