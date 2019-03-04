@@ -148,7 +148,15 @@ class ImageDataManager(BaseDataManager):
 
         if self._num_train_landmarks > 0:
             print('Create an image landmarks dataset and a typical image dataset')
-            imageDataset = ImageDataset(self.train, transform=transform_train)
+            if len(self.train) > 0:
+                imageDataset = ImageDataset(self.train, transform=transform_train)
+                self.trainloader = DataLoader(imageDataset,
+                                              batch_size=self.train_batch_size, shuffle=True,
+                                              num_workers=self.workers, pin_memory=self.use_gpu,
+                                              drop_last=True)
+            else:
+                self.trainloader = None
+
             imageLandmarksDataset = ImageLandmarksDataset(self.train_lm, transform=transform_train_lm)
 
             self.trainloader_lm = DataLoader(imageLandmarksDataset,
@@ -164,20 +172,20 @@ class ImageDataManager(BaseDataManager):
 
             self.trainloader_lm = None # No landmarks in train data so cannot create this loader
             
-        if self.train_sampler == 'RandomIdentitySampler':
-            self.trainloader = DataLoader(
-                imageDataset,
-                sampler=RandomIdentitySampler(self.train, self.train_batch_size, self.num_instances),
-                batch_size=self.train_batch_size, shuffle=False, num_workers=self.workers,
-                pin_memory=self.use_gpu, drop_last=True
-            )
+            if self.train_sampler == 'RandomIdentitySampler':
+                self.trainloader = DataLoader(
+                    imageDataset,
+                    sampler=RandomIdentitySampler(self.train, self.train_batch_size, self.num_instances),
+                    batch_size=self.train_batch_size, shuffle=False, num_workers=self.workers,
+                    pin_memory=self.use_gpu, drop_last=True
+                )
 
-        else:
-            self.trainloader = DataLoader(
-                imageDataset,
-                batch_size=self.train_batch_size, shuffle=True, num_workers=self.workers,
-                pin_memory=self.use_gpu, drop_last=True
-            )
+            else:
+                self.trainloader = DataLoader(
+                    imageDataset,
+                    batch_size=self.train_batch_size, shuffle=True, num_workers=self.workers,
+                    pin_memory=self.use_gpu, drop_last=True
+                )
 
         print("=> Initializing TEST (target) datasets")
         self.testloader_dict = {name: {'query': None, 'gallery': None} for name in self.target_names}
