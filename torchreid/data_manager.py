@@ -93,6 +93,7 @@ class ImageDataManager(BaseDataManager):
         self.vehicleid_test_size = vehicleid_test_size,
         self.keypoints_dirs = keypoints_dirs
         if len(self.keypoints_dirs) != len(self.source_names):
+            print('Warning! Keypoint directories given do not match number of source directories - keypoints not being used!')
             self.keypoints_dirs = ['']*len(self.source_names)
         
         # Build train and test transform functions
