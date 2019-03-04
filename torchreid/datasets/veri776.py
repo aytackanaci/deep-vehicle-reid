@@ -77,10 +77,10 @@ class VeRi776(BaseImageDataset):
             self.num_query_orients, self.num_query_landmarks = query_info[3:5]
             self.num_gallery_orients, self.num_gallery_landmarks = gallery_info[3:5]
 
-        if not self.regress_landmarks:
-            self.num_train_landmarks = int(self.num_train_landmarks/2)
-            self.num_query_landmarks = int(self.num_query_landmarks/2)
-            self.num_gallery_landmarks = int(self.num_gallery_landmarks/2)
+            if not self.regress_landmarks:
+                self.num_train_landmarks = int(self.num_train_landmarks/2)
+                self.num_query_landmarks = int(self.num_query_landmarks/2)
+                self.num_gallery_landmarks = int(self.num_gallery_landmarks/2)
             
         if verbose:
             print("=> VeRi776 loaded")
