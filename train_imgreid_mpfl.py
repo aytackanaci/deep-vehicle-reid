@@ -108,22 +108,25 @@ def main():
 
     criterion = {}
     criterion['id'] = CrossEntropyLoss(num_classes=dm.num_train_pids, use_gpu=use_gpu, label_smooth=args.label_smooth)
-    criterion['id_soft'] = CrossEntropyLoss(num_classes=dm.num_train_pids, use_gpu=use_gpu, label_smooth=False, multiclass=True)
+    criterion['id_soft'] = CrossEntropyLoss(num_classes=dm.num_train_pids, use_gpu=use_gpu, label_smooth=False)
     criterion['orient'] = CrossEntropyLoss(num_classes=dm.num_train_orients, use_gpu=use_gpu, label_smooth=args.label_smooth)
     criterion['landmarks'] = CrossEntropyLoss(num_classes=dm.num_train_landmarks, use_gpu=use_gpu, label_smooth=args.label_smooth)
     optimizer = init_optimizer(model.parameters(), **optimizer_kwargs(args))
     scheduler = lr_scheduler.MultiStepLR(optimizer, milestones=args.stepsize, gamma=args.gamma)
     # scheduler = lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.1, patience=3, verbose=True, threshold=1e-04)
 
-    if args.load_weights and check_isfile(args.load_weights): # load pretrained weights but ignore layers that don't match in size
-        checkpoint = torch.load(args.load_weights)
-        pretrain_dict = checkpoint['state_dict']
-        model_dict = model.state_dict()
-        pretrain_dict = {k: v for k, v in pretrain_dict.items() if k in model_dict and model_dict[k].size() == v.size()}
-        model_dict.update(pretrain_dict)
-        model.load_state_dict(model_dict)
-        print("Loaded pretrained weights from '{}'".format(args.load_weights))
-
+    if args.load_weights:
+        if check_isfile(args.load_weights): # load pretrained weights but ignore layers that don't match in size
+            checkpoint = torch.load(args.load_weights)
+            pretrain_dict = checkpoint['state_dict']
+            model_dict = model.state_dict()
+            pretrain_dict = {k: v for k, v in pretrain_dict.items() if k in model_dict and model_dict[k].size() == v.size()}
+            model_dict.update(pretrain_dict)
+            model.load_state_dict(model_dict)
+            print("Loaded pretrained weights from '{}'".format(args.load_weights))
+        else:
+            print("Error! Cannot load pretrained weights from '{}'".format(args.load_weights))
+            
     if args.resume and check_isfile(args.resume):
         checkpoint = torch.load(args.resume)
         model.load_state_dict(checkpoint['state_dict'])
@@ -268,9 +271,9 @@ def train(epoch, model, criterion, optimizer, trainloader, use_gpu, fixbase=Fals
 
         if feedback_consensus:
             consensus_prob = F.softmax(y_consensus, dim=1)
-            loss_consensus_id = criterion['id_soft'](y_id, consensus_prob)
-            loss_consensus_orient = criterion['id_soft'](y_orient_id, consensus_prob)
-            loss_consensus_landmarks = criterion['id_soft'](y_landmarks_id, consensus_prob)
+            loss_consensus_id = criterion['id_soft'](y_id, consensus_prob, one_hot=True)
+            loss_consensus_orient = criterion['id_soft'](y_orient_id, consensus_prob, one_hot=True)
+            loss_consensus_landmarks = criterion['id_soft'](y_landmarks_id, consensus_prob, one_hot=True)
 
         loss_consensus_labels = criterion['id'](y_consensus, pids)
 
