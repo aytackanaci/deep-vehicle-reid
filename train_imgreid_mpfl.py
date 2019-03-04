@@ -163,7 +163,8 @@ def main():
         for epoch in range(args.fixbase_epoch):
             start_train_time = time.time()
             loss, prec1 = train(epoch, model, criterion, optimizer, trainloader_lm, use_gpu, fixbase=True)
-            loss, prec1 = train(epoch, model, criterion, optimizer, trainloader, use_gpu, fixbase=True)
+            if trainloader:
+                loss, prec1 = train(epoch, model, criterion, optimizer, trainloader, use_gpu, fixbase=True)
             print('Epoch: [{:02d}] [Average Loss:] {:.4f}\t [Average Prec.:] {:.2%}'.format(epoch+1, loss, prec1))
             train_time += round(time.time() - start_train_time)
 
