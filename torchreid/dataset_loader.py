@@ -48,18 +48,29 @@ class ImageDataset(Dataset):
 
 class ImageLandmarksDataset(Dataset):
     """Image Person ReID Dataset with Landmarks"""
-    def __init__(self, dataset, transforms=None, regress_landmarks=False):
+    def __init__(self, dataset, num_landmarks, transforms=None, regress_landmarks=False):
         self.dataset = dataset
         self.transforms = transforms
-        self.regress_landmarks = regress_landmarks
+        self.num_landmarks = num_landmarks
+        if regress_landmarks:
+            self.landmarks_type=np.double
+        else:
+            self.landmarks_type=np.long
 
     def __len__(self):
         return len(self.dataset)
 
     def __getitem__(self, index):
-        img_path, pid, camid, orient, landmarks = self.dataset[index]
+        data = self.dataset[index]
+        img_path, pid, camid = data[0:3]
+
         img = read_image(img_path)
         im_size = img.size
+
+        if len(data) > 3:
+            orient, landmarks = data[3:5]
+        else:
+            orient, landmarks = -1, np.ones(self.num_landmarks,dtype=self.landmarks_type)*-1
 
         if self.transforms is not None:
             assert isinstance(self.transforms, (list, tuple))
@@ -88,7 +99,7 @@ class ClassficationDataset(Dataset):
         if self.transform is not None:
             img = self.transform(img)
 
-        return img, pid# , camid, img_path
+        return img, pid, camid, img_path
 
 class VideoDataset(Dataset):
     """Video Person ReID Dataset.

@@ -106,14 +106,8 @@ def main():
 
     print("Initializing Landmarks data manager")
     dm = ImageDataManager(use_gpu, scales=scales, grayscale=train_grayscale, **image_dataset_kwargs(args))
-    trainloader_lm, trainloader, testloader_dict = dm.return_dataloaders(landmarks=True)
-
-    if trainloader_lm is None:
-        if trainloader is None:
-            print('Error! No training data given!')
-            sys.exit(0)
-        else:
-            print('Warning: landmarks train loader not given, only id labels will be used for training')
+    trainloader, testloader_dict = dm.return_dataloaders(landmarks=True)
+    # sys.exit(0)
 
     print("Initializing model: {}".format(args.arch))
     model = models.init_model(name=args.arch, num_classes=dm.num_train_pids, num_orients=dm.num_train_orients, num_landmarks=dm.num_train_landmarks, input_size=args.width, loss={'xent'}, use_gpu=use_gpu, train_orient=train_orient, train_landmarks=train_landmarks, regress_landmarks=args.regress_landmarks, dropout=dropout, scales=scales, train_grayscale=train_grayscale)
@@ -122,12 +116,12 @@ def main():
 
     criterion = {}
     criterion['id'] = CrossEntropyLoss(num_classes=dm.num_train_pids, use_gpu=use_gpu, label_smooth=args.label_smooth)
-    criterion['orient'] = CrossEntropyLoss(num_classes=dm.num_train_orients, use_gpu=use_gpu, label_smooth=args.label_smooth, weighting=4)
+    criterion['orient'] = CrossEntropyLoss(num_classes=dm.num_train_orients, use_gpu=use_gpu, label_smooth=args.label_smooth, weighting=4, use_batch_subset=True)
 
     if args.regress_landmarks:
-        criterion['landmarks'] = SelectedMSELoss(args.train_batch_size, scales[0], use_gpu=use_gpu)
+        criterion['landmarks'] = SelectedMSELoss(args.train_batch_size, scales[0], use_gpu=use_gpu, use_batch_subset=True)
     else:
-        criterion['landmarks'] = CrossEntropyLoss(num_classes=dm.num_train_landmarks, use_gpu=use_gpu, label_smooth=args.label_smooth, multiclass=True, multilabel=True, weighting=10)
+        criterion['landmarks'] = CrossEntropyLoss(num_classes=dm.num_train_landmarks, use_gpu=use_gpu, label_smooth=args.label_smooth, multiclass=True, multilabel=True, weighting=10, use_batch_subset=True)
 
     if soft_criterion == 'kldiv':
         criterion['id_soft'] = KLDivLoss(num_classes=dm.num_train_pids, use_gpu=use_gpu, label_smooth=False)
@@ -188,10 +182,7 @@ def main():
 
         for epoch in range(args.fixbase_epoch):
             start_train_time = time.time()
-            if trainloader_lm:
-                loss, prec1 = train(epoch, model, criterion, optimizer, trainloader_lm, use_gpu, fixbase=True)
-            if trainloader:
-                loss, prec1 = train(epoch, model, criterion, optimizer, trainloader, use_gpu, fixbase=True)
+            loss, prec1 = train(epoch, model, criterion, optimizer, trainloader, use_gpu, fixbase=True)
             print('Epoch: [{:02d}] [Average Loss:] {:.4f}\t [Average Prec.:] {:.2%}'.format(epoch+1, loss, prec1))
             train_time += round(time.time() - start_train_time)
 
@@ -201,12 +192,7 @@ def main():
     feedback_consensus = True
     for epoch in range(args.start_epoch, args.max_epoch):
         start_train_time = time.time()
-        print('Training on landmark data')
-        if trainloader_lm:
-            loss, prec1 = train(epoch, model, criterion, optimizer, trainloader_lm, use_gpu, feedback_consensus=feedback_consensus)
-        if trainloader:
-            print('Training on non-landmark data')
-            loss, prec1 = train(epoch, model, criterion, optimizer, trainloader, use_gpu, feedback_consensus=feedback_consensus)
+        loss, prec1 = train(epoch, model, criterion, optimizer, trainloader, use_gpu, feedback_consensus=feedback_consensus)
         print('Epoch: [{:02d}] [Average Loss:] {:.4f}\t [Average Prec.:] {:.2%}'.format(epoch+1, loss, prec1))
         train_time += round(time.time() - start_train_time)
 
