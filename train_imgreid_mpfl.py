@@ -108,7 +108,7 @@ def main():
 
     criterion = {}
     criterion['id'] = CrossEntropyLoss(num_classes=dm.num_train_pids, use_gpu=use_gpu, label_smooth=args.label_smooth)
-    criterion['id_soft'] = CrossEntropyLoss(num_classes=dm.num_train_pids, use_gpu=use_gpu, label_smooth=False)
+    criterion['id_soft'] = KLDivLoss(num_classes=dm.num_train_pids, use_gpu=use_gpu, label_smooth=False)
     criterion['orient'] = CrossEntropyLoss(num_classes=dm.num_train_orients, use_gpu=use_gpu, label_smooth=args.label_smooth)
     criterion['landmarks'] = CrossEntropyLoss(num_classes=dm.num_train_landmarks, use_gpu=use_gpu, label_smooth=args.label_smooth)
     optimizer = init_optimizer(model.parameters(), **optimizer_kwargs(args))
@@ -272,10 +272,9 @@ def train(epoch, model, criterion, optimizer, trainloader, use_gpu, fixbase=Fals
             loss_landmarks = criterion['landmarks'](y_landmarks, plandmarks, one_hot=True)
 
         if feedback_consensus:
-            consensus_prob = F.softmax(y_consensus, dim=1)
-            loss_consensus_id = criterion['id_soft'](y_id, consensus_prob, one_hot=True)
-            loss_consensus_orient = criterion['id_soft'](y_orient_id, consensus_prob, one_hot=True)
-            loss_consensus_landmarks = criterion['id_soft'](y_landmarks_id, consensus_prob, one_hot=True)
+            loss_consensus_id = criterion['id_soft'](y_id, y_consensus)
+            loss_consensus_orient = criterion['id_soft'](y_orient_id, y_consensus)
+            loss_consensus_landmarks = criterion['id_soft'](y_landmarks_id, y_consensus)
 
         loss_consensus_labels = criterion['id'](y_consensus, pids)
 
