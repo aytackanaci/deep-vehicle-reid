@@ -3,7 +3,10 @@ data/
 log/
 saved-models/
 debug.py
-
+e__*
+*~
+*#
+        
 # cython eval code
 torchreid/eval_cylib/eval_metrics_cy.c
 torchreid/eval_cylib/*.html
