@@ -48,24 +48,40 @@ class ImageDataset(Dataset):
 
 class ImageLandmarksDataset(Dataset):
     """Image Person ReID Dataset with Landmarks"""
-    def __init__(self, dataset, transforms=None, regress_landmarks=False):
+    def __init__(self, dataset, num_landmarks, transforms=None, regress_landmarks=False):
         self.dataset = dataset
         self.transforms = transforms
-        self.regress_landmarks = regress_landmarks
+        self.num_landmarks = num_landmarks
+        if regress_landmarks:
+            self.landmarks_type=np.double
+        else:
+            self.landmarks_type=np.long
 
     def __len__(self):
         return len(self.dataset)
 
     def __getitem__(self, index):
-        img_path, pid, camid, orient, landmarks = self.dataset[index]
+        data = self.dataset[index]
+        img_path, pid, camid = data[0:3]
+
         img = read_image(img_path)
         im_size = img.size
+
+        if len(data) > 3:
+            orient, landmarks = data[3:5]
+        else:
+            orient, landmarks = -1, np.ones(self.num_landmarks,dtype=self.landmarks_type)*-1
 
         if self.transforms is not None:
             assert isinstance(self.transforms, (list, tuple))
             imgs, orients, landmark_sets = (), (), ()
             for transform in self.transforms:
                 img_new, orient_new, landmarks_new = transform((img, orient, landmarks))
+                if len(landmarks_new) != self.num_landmarks:
+                    print('Warning! Number of transformed landmarks for',landmarks,'is',len(landmarks_new),'should be',self.num_landmarks,'- landmark labels will be removed')
+                    landmarks_new = np.ones(self.num_landmarks,dtype=self.landmarks_type)*-1
+                if landmarks_new.dtype != self.landmarks_type:
+                    landmarks_new = landmarks_new.astype(self.landmarks_type)
                 imgs = imgs + (img_new,)
                 orients = orients + (orient_new,)
                 landmark_sets = landmark_sets + (landmarks_new,)
@@ -88,7 +104,7 @@ class ClassficationDataset(Dataset):
         if self.transform is not None:
             img = self.transform(img)
 
-        return img, pid# , camid, img_path
+        return img, pid, camid, img_path
 
 class VideoDataset(Dataset):
     """Video Person ReID Dataset.

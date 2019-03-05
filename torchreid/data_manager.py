@@ -32,10 +32,6 @@ class BaseDataManager(object):
         """
         Return trainloader and testloader dictionary
         """
-
-        if landmarks:
-            return self.trainloader_lm, self.trainloader, self.testloader_dict
-
         return self.trainloader, self.testloader_dict
 
 
@@ -97,25 +93,6 @@ class ImageDataManager(BaseDataManager):
             print('Warning! Keypoint directories given do not match number of source directories - keypoints not being used!')
             self.keypoints_dirs = ['']*len(self.source_names)
 
-        # Build train and test transform functions
-        if scales is None:
-            transform_train = [build_transforms(self.height, self.width, is_train=True)]
-            transform_train_lm = [build_transforms(self.height, self.width, is_train=True, inc_orient_lm=True, regress_landmarks=regress_landmarks)]
-            transform_test = [build_transforms(self.height, self.width, is_train=False)]
-            height = self.height
-            width = self.width
-        else:
-            transform_train = [build_transforms(scale, scale, is_train=True) for scale in scales]
-            transform_train_lm = [build_transforms(scale, scale, is_train=True, inc_orient_lm=True, regress_landmarks=regress_landmarks) for scale in scales]
-            transform_test = [build_transforms(scale, scale, is_train=False) for scale in scales]
-            height = scales[0]
-            width = scales[0]
-
-        if grayscale:
-            transform_train.append(build_transforms(height, width, is_train=True, grayscale=True))
-            transform_train_lm.append(build_transforms(height, width, is_train=True, inc_orient_lm=True, regress_landmarks=regress_landmarks, grayscale=True))
-            transform_test.append(build_transforms(height, width, is_train=False, grayscale=True))
-
         print("=> Initializing TRAIN (source) datasets")
         self.train = []
         self.train_lm = []
@@ -143,7 +120,7 @@ class ImageDataManager(BaseDataManager):
                 camid += self._num_train_cams
                 if use_keypoints:
                     orient, landmarks = data[3:5]
-                    self.train_lm.append((img_path, pid, camid, orient, landmarks))
+                    self.train.append((img_path, pid, camid, orient, landmarks))
                 else:
                     self.train.append((img_path, pid, camid))
 
@@ -156,45 +133,46 @@ class ImageDataManager(BaseDataManager):
                 self._num_train_orients = max(dataset.num_train_orients, self._num_train_orients)
                 self._num_train_landmarks = max(dataset.num_train_landmarks, self._num_train_landmarks)
 
-        if self.train_sampler == 'RandomIdentitySampler':
-            sampler=RandomIdentitySampler(self.train, self.train_batch_size, self.num_instances)
-            sampler_lm=RandomIdentitySampler(self.train_lm, self.train_batch_size, self.num_instances)
-            shuffle=False
+        inc_orient_lm = True if self._num_train_landmarks > 0 else False
+
+        # Build train and test transform functions
+        if scales is None:
+            transform_train = [build_transforms(self.height, self.width, is_train=True)]
+            transform_train_lm = [build_transforms(self.height, self.width, is_train=True, inc_orient_lm=inc_orient_lm, regress_landmarks=regress_landmarks)]
+            transform_test = [build_transforms(self.height, self.width, is_train=False)]
+            height = self.height
+            width = self.width
         else:
-            sampler=None
-            sampler_lm=None
-            shuffle=True
+            transform_train = [build_transforms(scale, scale, is_train=True) for scale in scales]
+            transform_train_lm = [build_transforms(scale, scale, is_train=True, inc_orient_lm=inc_orient_lm, regress_landmarks=regress_landmarks) for scale in scales]
+            transform_test = [build_transforms(scale, scale, is_train=False) for scale in scales]
+            height = scales[0]
+            width = scales[0]
+
+        if grayscale:
+            transform_train.append(build_transforms(height, width, is_train=True, grayscale=True))
+            transform_train_lm.append(build_transforms(height, width, is_train=True, inc_orient_lm=inc_orient_lm, regress_landmarks=regress_landmarks, grayscale=True))
+            transform_test.append(build_transforms(height, width, is_train=False, grayscale=True))
 
         if self._num_train_landmarks > 0:
-            print('Create an image landmarks dataset and a typical image dataset')
-            if len(self.train) > 0:
-                imageDataset = ImageDataset(self.train, transforms=transform_train)
-                self.trainloader = DataLoader(imageDataset,
-                                              sampler=sampler,
-                                              batch_size=self.train_batch_size, shuffle=shuffle,
-                                              num_workers=self.workers, pin_memory=self.use_gpu,
-                                              drop_last=True)
-            else:
-                self.trainloader = None
+            print('Create an image landmarks dataset.')
 
-            imageLandmarksDataset = ImageLandmarksDataset(self.train_lm, transforms=transform_train_lm)
-
-            self.trainloader_lm = DataLoader(imageLandmarksDataset,
-                                             sampler=sampler_lm,
-                                             batch_size=self.train_batch_size, shuffle=shuffle,
-                                             num_workers=self.workers,
-                                             pin_memory=self.use_gpu, drop_last=True
-            )
+            imageDataset = ImageLandmarksDataset(self.train, self._num_train_landmarks, transforms=transform_train_lm, regress_landmarks=regress_landmarks)
         else:
             print('Create an image dataset')
             imageDataset = ImageDataset(self.train, transforms=transform_train)
 
-            self.trainloader_lm = None # No landmarks in train data so cannot create this loader
-
+        if self.train_sampler == 'RandomIdentitySampler':
             self.trainloader = DataLoader(
                 imageDataset,
-                sampler=sampler,
-                batch_size=self.train_batch_size, shuffle=shuffle, num_workers=self.workers,
+                sampler=RandomIdentitySampler(self.train, self.train_batch_size, self.num_instances),
+                batch_size=self.train_batch_size, shuffle=False, num_workers=self.workers,
+                pin_memory=self.use_gpu, drop_last=True
+            )
+        else:
+            self.trainloader = DataLoader(
+                imageDataset,
+                batch_size=self.train_batch_size, shuffle=True, num_workers=self.workers,
                 pin_memory=self.use_gpu, drop_last=True
             )
 
