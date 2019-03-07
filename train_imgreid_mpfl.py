@@ -65,7 +65,7 @@ def main():
     args.arch = 'mpfl'
 
     dropout = 0.001
-    
+
     if args.use_landmarks_only and args.use_orient_only:
         print('Error: Only one of --use_orient_only or --use_landmarks_only can be selected.')
         sys.exit(1)
@@ -76,7 +76,7 @@ def main():
     elif args.use_landmarks_only:
         print('Training only ID and landmark branches')
         train_orient=False
-        
+
     args.save_dir = exp_name(args, train_orient, train_landmarks, dropout)
 
     set_random_seed(args.seed)
@@ -126,7 +126,7 @@ def main():
             print("Loaded pretrained weights from '{}'".format(args.load_weights))
         else:
             print("Error! Cannot load pretrained weights from '{}'".format(args.load_weights))
-            
+
     if args.resume and check_isfile(args.resume):
         checkpoint = torch.load(args.resume)
         model.load_state_dict(checkpoint['state_dict'])
@@ -252,7 +252,7 @@ def train(epoch, model, criterion, optimizer, trainloader, use_gpu, fixbase=Fals
         img, pids = data[0:2]
         if use_gpu:
             img, pids = img.cuda(), pids.cuda(),
-        
+
         if len(data) > 4:
             # We have landmark and orientation labels
             porient, plandmarks = data[3:5]
@@ -272,15 +272,15 @@ def train(epoch, model, criterion, optimizer, trainloader, use_gpu, fixbase=Fals
             loss_landmarks = criterion['landmarks'](y_landmarks, plandmarks, one_hot=True)
 
         if feedback_consensus:
-            loss_consensus_id = criterion['id_soft'](y_id, y_consensus)
-            loss_consensus_orient = criterion['id_soft'](y_orient_id, y_consensus)
-            loss_consensus_landmarks = criterion['id_soft'](y_landmarks_id, y_consensus)
+            loss_consensus_id = criterion['id_soft'](y_id, y_consensus.detach())
+            loss_consensus_orient = criterion['id_soft'](y_orient_id, y_consensus.detach())
+            loss_consensus_landmarks = criterion['id_soft'](y_landmarks_id, y_consensus.detach())
 
         loss_consensus_labels = criterion['id'](y_consensus, pids)
 
         prec, = accuracy(y_consensus.data, pids.data)
         prec1 = prec[0]  # get top 1
-        
+
         optimizer.zero_grad()
 
         # Individual branch losses
@@ -296,7 +296,7 @@ def train(epoch, model, criterion, optimizer, trainloader, use_gpu, fixbase=Fals
                 total_loss_orient += loss_consensus_orient
 
             total_loss += total_loss_orient
-            
+
         if train_landmarks:
             total_loss_landmarks = loss_landmarks_id
             if update_lmo:
@@ -305,13 +305,13 @@ def train(epoch, model, criterion, optimizer, trainloader, use_gpu, fixbase=Fals
                 total_loss_landmarks += loss_consensus_landmarks
 
             total_loss += total_loss_landmarks
-            
+
         # Consensus loss according to labels
         total_loss += loss_consensus_labels
 
         # Now propagate back all losses
         total_loss.backward()
-        
+
         optimizer.step()
 
         batch_time.update(time.time() - end)
