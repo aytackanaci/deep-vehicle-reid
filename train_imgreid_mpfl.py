@@ -372,11 +372,18 @@ def test(model, test_set, name, queryloader, galleryloader, use_gpu, ranks=[1, 5
 
     with torch.no_grad():
         qf, q_pids, q_camids = [], [], []
-        for batch_idx, (img, pids, camids, _) in enumerate(queryloader):
-            if use_gpu: img = img.cuda()
+        for batch_idx, (imgs, pids, camids, _) in enumerate(queryloader):
+            if train_scales:
+                img1, img2 = imgs
+            else:
+                img1, img2 = imgs[0], None
+            if use_gpu:
+                img1 = img1.cuda()
+                if train_scales:
+                    img2 = img2.cuda()
 
             end = time.time()
-            features = model(img)
+            features = model(img1, img2)
             batch_time.update(time.time() - end)
 
             features = features.data.cpu()
@@ -391,11 +398,18 @@ def test(model, test_set, name, queryloader, galleryloader, use_gpu, ranks=[1, 5
 
         gf, g_pids, g_camids = [], [], []
         end = time.time()
-        for batch_idx, (img, pids, camids, _) in enumerate(galleryloader):
-            if use_gpu: img = img.cuda()
+        for batch_idx, (imgs, pids, camids, _) in enumerate(galleryloader):
+            if train_scales:
+                img1, img2 = imgs
+            else:
+                img1, img2 = imgs[0], None
+            if use_gpu:
+                img1 = img1.cuda()
+                if train_scales:
+                    img2 = img2.cuda()
 
             end = time.time()
-            features = model(img)
+            features = model(img1, img2)
             batch_time.update(time.time() - end)
 
             features = features.data.cpu()
