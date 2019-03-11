@@ -53,7 +53,7 @@ def exp_name(cfg, train_o, train_l, train_s, dropout):
     return '_'.join(name)
 
 
-train_scales = False
+train_scales = True
 train_orient=True
 train_landmarks=True
 
@@ -252,39 +252,55 @@ def train(epoch, model, criterion, optimizer, trainloader, use_gpu, fixbase=Fals
     end = time.time()
     for batch_idx, data in enumerate(trainloader):
 
-        print(data)
-
         data_time.update(time.time() - end)
 
         update_lmo = False
 
         # Only have id prediction
-        img, pids = data[0:2]
+        imgs, pids = data[0:2]
+        if train_scales:
+            img1, img2 = imgs
+        else:
+            img1, img2 = imgs[0], None
+
         if use_gpu:
-            img, pids = img.cuda(), pids.cuda(),
+            img1, pids = img1.cuda(), pids.cuda(),
+            if train_scales:
+                img2 = img2.cuda()
 
         if len(data) > 4:
             # We have landmark and orientation labels
-            porient, plandmarks = data[3:5]
+            porients, plandmark_sets = data[3:5]
+            porient, plandmarks = porients[0], plandmark_sets[0]
             plandmarks = plandmarks.float()
             if use_gpu:
                 porient, plandmarks =  porient.cuda(), plandmarks.cuda()
             update_lmo = True
 
-        y_id, y_orient, y_landmarks, y_orient_id, y_landmarks_id, y_consensus = model(img)
+        y_id, y_id_small, y_orient, y_landmarks, y_orient_id, y_landmarks_id, y_consensus = model(img1, x2=img2)
 
         loss_id = criterion['id'](y_id, pids)
-        loss_orient_id = criterion['id'](y_orient_id, pids)
-        loss_landmarks_id = criterion['id'](y_landmarks_id, pids)
+        if train_scales:
+            loss_id_small = criterion['id'](y_id_small, pids)
+        if train_orient:
+            loss_orient_id = criterion['id'](y_orient_id, pids)
+        if train_landmarks:
+            loss_landmarks_id = criterion['id'](y_landmarks_id, pids)
 
         if update_lmo:
-            loss_orient = criterion['orient'](y_orient, porient)
-            loss_landmarks = criterion['landmarks'](y_landmarks, plandmarks, one_hot=True)
+            if train_orient:
+                loss_orient = criterion['orient'](y_orient, porient)
+            if train_landmarks:
+                loss_landmarks = criterion['landmarks'](y_landmarks, plandmarks, one_hot=True)
 
         if feedback_consensus:
             loss_consensus_id = criterion['id_soft'](y_id, y_consensus.detach())
-            loss_consensus_orient = criterion['id_soft'](y_orient_id, y_consensus.detach())
-            loss_consensus_landmarks = criterion['id_soft'](y_landmarks_id, y_consensus.detach())
+            if train_scales:
+                loss_consensus_id_small = criterion['id_soft'](y_id_small, y_consensus.detach())
+            if train_orient:
+                loss_consensus_orient = criterion['id_soft'](y_orient_id, y_consensus.detach())
+            if train_landmarks:
+                loss_consensus_landmarks = criterion['id_soft'](y_landmarks_id, y_consensus.detach())
 
         loss_consensus_labels = criterion['id'](y_consensus, pids)
 
@@ -297,6 +313,12 @@ def train(epoch, model, criterion, optimizer, trainloader, use_gpu, fixbase=Fals
         total_loss = loss_id
         if feedback_consensus:
             total_loss += loss_consensus_id
+
+        if train_scales:
+            total_loss_small = loss_id_small
+            if feedback_consensus:
+                total_loss_small += loss_consensus_id_small
+            total_loss += total_loss_small
 
         if train_orient:
             total_loss_orient = loss_orient_id

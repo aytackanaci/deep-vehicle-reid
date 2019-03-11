@@ -63,14 +63,12 @@ class ImageLandmarksDataset(Dataset):
 
         if self.transforms is not None:
             assert isinstance(self.transforms, (list, tuple))
-            print(self.transforms)
-            result = self.transforms[0](img, orient, landmarks)
-
-        imgs, orients, landmark_sets = ()
-        for idx in range(0,len(result),3):
-            imgs = imgs + (result[idx],)
-            orients = orients + (result[idx+1],)
-            landmark_sets = landmark_sets + (result[idx+2],)
+            imgs, orients, landmark_sets = (), (), ()
+            for transform in self.transforms:
+                img_new, orient_new, landmarks_new = transform((img, orient, landmarks))
+                imgs = imgs + (img_new,)
+                orients = orients + (orient_new,)
+                landmark_sets = landmark_sets + (landmarks_new,)
 
         return imgs, pid, camid, orients, landmark_sets, img_path
 

@@ -142,23 +142,22 @@ class MPFL(nn.Module):
                 if m.bias is not None:
                     init.constant_(m.bias, 0)
 
-    def forward(self, x):
+    def forward(self, x1, x2=None):
 
-        f_id = self.id_branch(x)
+        f_id = self.id_branch(x1)
         f_id = self.dropout_id(f_id)
         y_id = self.fc_id(f_id)
 
         if self.train_scales:
-            f_id_small = self.id_small_branch(x)
-            f_ = self.dropout_id_small(f_id_small)
+            assert(x2 is not None, "Small image required for training scaled branch")
+            f_id_small = self.id_small_branch(x2)
+            f_id_small = self.dropout_id_small(f_id_small)
             y_id_small = self.fc_id_small(f_id_small)
-            y_id_small_id = self.fc_id_small_id(f_id_small)
         else:
             y_id_small = 0
-            y_id_small_id = 0
 
         if self.train_orient:
-            f_orient = self.orient_branch(x)
+            f_orient = self.orient_branch(x1)
             f_orient = self.dropout_orient(f_orient)
             y_orient = self.fc_orient(f_orient)
             y_orient_id = self.fc_orient_id(f_orient)
@@ -167,7 +166,7 @@ class MPFL(nn.Module):
             y_orient_id = 0
 
         if self.train_landmarks:
-            f_landmarks = self.landmarks_branch(x)
+            f_landmarks = self.landmarks_branch(x1)
             f_landmarks = self.dropout_landmarks(f_landmarks)
             y_landmarks = self.fc_landmarks(f_landmarks)
             y_landmarks_id = self.fc_landmarks_id(f_landmarks)
@@ -189,10 +188,10 @@ class MPFL(nn.Module):
         if not self.training:
             return f_fusion
 
-        y_concensus = self.fc_consensus(f_fusion)
+        y_consensus = self.fc_consensus(f_fusion)
 
         if self.loss == {'xent'}:
-            return y_id, y_orient, y_landmarks, y_orient_id, y_landmarks_id, y_consensus
+            return y_id, y_id_small, y_orient, y_landmarks, y_orient_id, y_landmarks_id, y_consensus
         else:
             raise KeyError("Unsupported loss: {}".format(self.loss))
 
