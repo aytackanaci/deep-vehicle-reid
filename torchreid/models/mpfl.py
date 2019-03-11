@@ -18,8 +18,8 @@ class MPFL(nn.Module):
 
 
     def __init__(self, num_classes, num_orients, num_landmarks,
-                 loss,
-                 scales=[1.0, 0.5],
+                 loss, pretrained,
+                 scales=[224],
                  dropout_p=0.001,
                  train_orient=True,
                  train_landmarks=True,
@@ -28,10 +28,13 @@ class MPFL(nn.Module):
 
         super(MPFL, self).__init__()
 
+        print('scales:',scales)
+        self.train_scales = len(scales) > 1
+        print(self.train_scales)
         self.train_orient = train_orient
         self.train_landmarks = train_landmarks
         self.regress_lms = regress_landmarks
-        
+
         self.loss = loss
         self.num_classes = num_classes
         self.num_orients = num_orients
@@ -41,56 +44,59 @@ class MPFL(nn.Module):
             print('Error! Require more than one orient to train model with orient branch')
         if self.train_landmarks and self.num_landmarks == 0:
             print('Error! Require at least one landmark to train model with landmarks branch')
-    
+
         self.dropout_p = dropout_p
 
         print('Model created with num pids:',self.num_classes,'num orients:',self.num_orients,'num_landmarks:',self.num_landmarks)
 
         self.id_branch = mobilenetv2ws(num_classes=num_classes,
-                                loss=loss,
-                                input_size=224,
-                                pretrained='imagenet',
-                                )
-
-        self.orient_branch = mobilenetv2ws(num_classes=num_orients,
-                                loss=loss,
-                                input_size=224,
-                                pretrained='imagenet',
-                                )
-
-        self.landmarks_branch = mobilenetv2ws(num_classes=num_landmarks,
-                                loss=loss,
-                                input_size=224,
-                                pretrained='imagenet',
-                                )
-
+                                       loss=loss,
+                                       input_size=scales[0],
+                                       pretrained=pretrained)
         self.id_branch.feature_extract_mode = True
-        self.orient_branch.feature_extract_mode = True
-        self.landmarks_branch.feature_extract_mode = True
-
         self.dropout_id = nn.Dropout(p=dropout_p, inplace=True)
-        self.dropout_orient = nn.Dropout(p=dropout_p, inplace=True)
-        self.dropout_landmarks = nn.Dropout(p=dropout_p, inplace=True)
+        self.fc_id = nn.Linear(self.id_branch.last_conv_out_ch, self.num_classes)
+
+        if self.train_scales:
+            self.id_small_branch = mobilenetv2ws(num_classes=num_classes,
+                                                 loss=loss,
+                                                 input_size=scales[1],
+                                                 pretrained=pretrained)
+            self.id_small_branch.feature_extract_mode = True
+            self.dropout_id_small = nn.Dropout(p=dropout_p, inplace=True)
+            self.fc_id_small = nn.Linear(self.id_small_branch.last_conv_out_ch, self.num_classes)
+
+        if self.train_orient:
+            self.orient_branch = mobilenetv2ws(num_classes=num_orients,
+                                               loss=loss,
+                                               input_size=scales[0],
+                                               pretrained=pretrained)
+            self.orient_branch.feature_extract_mode = True
+            self.dropout_orient = nn.Dropout(p=dropout_p, inplace=True)
+            self.fc_orient = nn.Linear(self.orient_branch.last_conv_out_ch, self.num_orients)
+            self.fc_orient_id = nn.Linear(self.orient_branch.last_conv_out_ch, self.num_classes)
+
+        if self.train_landmarks:
+            self.landmarks_branch = mobilenetv2ws(num_classes=num_landmarks,
+                                                  loss=loss,
+                                                  input_size=scales[1],
+                                                  pretrained=pretrained)
+            self.landmarks_branch.feature_extract_mode = True
+            self.fc_landmarks = nn.Linear(self.landmarks_branch.last_conv_out_ch, self.num_landmarks)
+            self.dropout_landmarks = nn.Dropout(p=dropout_p, inplace=True)
+            self.fc_landmarks_id = nn.Linear(self.landmarks_branch.last_conv_out_ch, self.num_classes)
+
         self.dropout_consensus = nn.Dropout(p=dropout_p, inplace=True)
 
 
-        self.fc_id = nn.Linear(self.id_branch.last_conv_out_ch, self.num_classes)
-        self.fc_orient = nn.Linear(self.orient_branch.last_conv_out_ch, self.num_orients)
-        self.fc_landmarks = nn.Linear(self.landmarks_branch.last_conv_out_ch, self.num_landmarks)
-        self.fc_orient_id = nn.Linear(self.orient_branch.last_conv_out_ch, self.num_classes)
-        self.fc_landmarks_id = nn.Linear(self.landmarks_branch.last_conv_out_ch, self.num_classes)
-
         self.fusion_last_conv_out = self.id_branch.last_conv_out_ch
-        if (train_orient):
+        if self.train_scales:
+            self.fusion_last_conv_out += self.id_small_branch.last_conv_out_ch
+        if self.train_orient:
             self.fusion_last_conv_out += self.orient_branch.last_conv_out_ch
-        if (train_landmarks):
+        if self.train_landmarks:
             self.fusion_last_conv_out += self.landmarks_branch.last_conv_out_ch
         self.fc_consensus = nn.Linear(self.fusion_last_conv_out, self.num_classes)
-
-        # self.fc_consensus = self._construct_fc_layer(
-        #         [self.num_classes],
-        #         self.scale10.last_conv_out_ch + self.scale05.last_conv_out_ch,
-        #         dropout_p=0.2)
 
         self.init_params()
 
@@ -139,21 +145,40 @@ class MPFL(nn.Module):
     def forward(self, x):
 
         f_id = self.id_branch(x)
-        f_orient = self.orient_branch(x)
-        f_landmarks = self.landmarks_branch(x)
-
         f_id = self.dropout_id(f_id)
-        f_orient = self.dropout_orient(f_orient)
-        f_landmarks = self.dropout_landmarks(f_landmarks)
-
         y_id = self.fc_id(f_id)
-        y_orient = self.fc_orient(f_orient)
-        y_landmarks = self.fc_landmarks(f_landmarks)
-        y_orient_id = self.fc_orient_id(f_orient)
-        y_landmarks_id = self.fc_landmarks_id(f_landmarks)
-        
+
+        if self.train_scales:
+            f_id_small = self.id_small_branch(x)
+            f_ = self.dropout_id_small(f_id_small)
+            y_id_small = self.fc_id_small(f_id_small)
+            y_id_small_id = self.fc_id_small_id(f_id_small)
+        else:
+            y_id_small = 0
+            y_id_small_id = 0
+
+        if self.train_orient:
+            f_orient = self.orient_branch(x)
+            f_orient = self.dropout_orient(f_orient)
+            y_orient = self.fc_orient(f_orient)
+            y_orient_id = self.fc_orient_id(f_orient)
+        else:
+            y_orient = 0
+            y_orient_id = 0
+
+        if self.train_landmarks:
+            f_landmarks = self.landmarks_branch(x)
+            f_landmarks = self.dropout_landmarks(f_landmarks)
+            y_landmarks = self.fc_landmarks(f_landmarks)
+            y_landmarks_id = self.fc_landmarks_id(f_landmarks)
+        else:
+            y_landmarks = 0
+            y_landmarks_id = 0
+
         f_fusion = f_id
 
+        if self.train_scales:
+            f_fusion = torch.cat([f_fusion, f_id_small], 1)
         if self.train_orient:
             f_fusion = torch.cat([f_fusion, f_orient], 1)
         if self.train_landmarks:
@@ -167,12 +192,12 @@ class MPFL(nn.Module):
         y_concensus = self.fc_consensus(f_fusion)
 
         if self.loss == {'xent'}:
-            return y_id, y_orient, y_landmarks, y_orient_id, y_landmarks_id, y_concensus
+            return y_id, y_orient, y_landmarks, y_orient_id, y_landmarks_id, y_consensus
         else:
             raise KeyError("Unsupported loss: {}".format(self.loss))
 
 def mpfl(num_classes, num_orients, num_landmarks, loss, pretrained='imagenet', **kwargs):
 
-    model = MPFL(num_classes, num_orients, num_landmarks, loss, pretrained, **kwargs)
+    model = MPFL(num_classes, num_orients, num_landmarks, loss, pretrained,  **kwargs)
 
     return model

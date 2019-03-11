@@ -27,7 +27,7 @@ def read_image(img_path):
             pass
     return img
 
-class MultiScaleImageDataset(Dataset):
+class ImageDataset(Dataset):
     """Image Person ReID Dataset"""
     def __init__(self, dataset, transforms=None):
         self.dataset = dataset
@@ -46,6 +46,33 @@ class MultiScaleImageDataset(Dataset):
 
         return imgs, pid, camid, img_path
 
+class ImageLandmarksDataset(Dataset):
+    """Image Person ReID Dataset with Landmarks"""
+    def __init__(self, dataset, transforms=None, regress_landmarks=False):
+        self.dataset = dataset
+        self.transforms = transforms
+        self.regress_landmarks = regress_landmarks
+
+    def __len__(self):
+        return len(self.dataset)
+
+    def __getitem__(self, index):
+        img_path, pid, camid, orient, landmarks = self.dataset[index]
+        img = read_image(img_path)
+        im_size = img.size
+
+        if self.transforms is not None:
+            assert isinstance(self.transforms, (list, tuple))
+            print(self.transforms)
+            result = self.transforms[0](img, orient, landmarks)
+
+        imgs, orients, landmark_sets = ()
+        for idx in range(0,len(result),3):
+            imgs = imgs + (result[idx],)
+            orients = orients + (result[idx+1],)
+            landmark_sets = landmark_sets + (result[idx+2],)
+
+        return imgs, pid, camid, orients, landmark_sets, img_path
 
 class ClassficationDataset(Dataset):
     """Image Person ReID Dataset"""
@@ -65,44 +92,6 @@ class ClassficationDataset(Dataset):
 
         return img, pid# , camid, img_path
 
-class ImageDataset(Dataset):
-    """Image Person ReID Dataset"""
-    def __init__(self, dataset, transform=None):
-        self.dataset = dataset
-        self.transform = transform
-
-    def __len__(self):
-        return len(self.dataset)
-
-    def __getitem__(self, index):
-        img_path, pid, camid = self.dataset[index]
-        img = read_image(img_path)
-
-        if self.transform is not None:
-            img = self.transform(img)
-
-        return img, pid, camid, img_path
-
-class ImageLandmarksDataset(Dataset):
-    """Image Person ReID Dataset with Landmarks"""
-    def __init__(self, dataset, transform=None, regress_landmarks=False):
-        self.dataset = dataset
-        self.transform = transform
-        self.regress_landmarks = regress_landmarks
-
-    def __len__(self):
-        return len(self.dataset)
-
-    def __getitem__(self, index):
-        img_path, pid, camid, orient, landmarks = self.dataset[index]
-        img = read_image(img_path)
-        im_size = img.size
-        
-        if self.transform is not None:
-            img, orient, landmarks = self.transform((img, orient, landmarks))
-            
-        return img, pid, camid, orient, landmarks, img_path
-        
 class VideoDataset(Dataset):
     """Video Person ReID Dataset.
     Note batch data has shape (batch, seq_len, channel, height, width).
