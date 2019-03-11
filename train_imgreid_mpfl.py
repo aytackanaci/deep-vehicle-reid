@@ -27,7 +27,7 @@ from torchreid.utils.generaltools import set_random_seed
 from torchreid.eval_metrics import evaluate, accuracy
 from torchreid.optimizers import init_optimizer
 
-def exp_name(cfg, train_o, train_l, dropout):
+def exp_name(cfg, train_o, train_l, train_s, dropout):
     name = [
         'e_' + cfg.prefix,
         'S_' + '-'.join(cfg.source_names),
@@ -44,19 +44,21 @@ def exp_name(cfg, train_o, train_l, dropout):
         'lr' + str(cfg.lr),
         'wd' + str(cfg.weight_decay),
         'do' + str(dropout),
-        'orient' + str(train_o),
-        'landmarks' + str(train_l),
-        'lmRegress' if cfg.regress_landmarks else 'lmClass'
+        'o' + str(train_o),
+        'lm' + str(train_l),
+        'lmR' if cfg.regress_landmarks else 'lmC',
+        's' + str(train_s)
         ]
 
     return '_'.join(name)
 
 
+train_scales = False
 train_orient=True
 train_landmarks=True
 
 def main():
-    global args, train_orient, train_landmarks
+    global args, train_orient, train_landmarks, train_scales
 
     # read config
     parser = argument_parser()
@@ -77,7 +79,7 @@ def main():
         print('Training only ID and landmark branches')
         train_orient=False
 
-    args.save_dir = exp_name(args, train_orient, train_landmarks, dropout)
+    args.save_dir = exp_name(args, train_orient, train_landmarks, train_scales, dropout)
 
     set_random_seed(args.seed)
     if not args.use_avai_gpus: os.environ['CUDA_VISIBLE_DEVICES'] = args.gpu_devices
@@ -93,8 +95,13 @@ def main():
     else:
         print("Currently using CPU, however, GPU is highly recommended")
 
+    if train_scales:
+        scales = [224, 160]
+    else:
+        scales = [224]
+
     print("Initializing Landmarks data manager")
-    dm = ImageDataManager(use_gpu, **image_dataset_kwargs(args))
+    dm = ImageDataManager(use_gpu, scales=scales, **image_dataset_kwargs(args))
     trainloader_lm, trainloader, testloader_dict = dm.return_dataloaders(landmarks=True)
     # sys.exit(0)
 
@@ -102,7 +109,7 @@ def main():
         print('Warning: landmarks train loader not given, only id labels will be used for training')
 
     print("Initializing model: {}".format(args.arch))
-    model = models.init_model(name=args.arch, num_classes=dm.num_train_pids, num_orients=dm.num_train_orients, num_landmarks=dm.num_train_landmarks, input_size=args.width, loss={'xent'}, use_gpu=use_gpu, train_orient=train_orient, train_landmarks=train_landmarks, regress_landmarks=args.regress_landmarks, dropout=dropout)
+    model = models.init_model(name=args.arch, num_classes=dm.num_train_pids, num_orients=dm.num_train_orients, num_landmarks=dm.num_train_landmarks, input_size=args.width, loss={'xent'}, use_gpu=use_gpu, train_orient=train_orient, train_landmarks=train_landmarks, regress_landmarks=args.regress_landmarks, dropout=dropout, scales=scales)
     print("Model size: {:.3f} M".format(count_num_param(model)))
     print(model)
 
@@ -244,6 +251,9 @@ def train(epoch, model, criterion, optimizer, trainloader, use_gpu, fixbase=Fals
 
     end = time.time()
     for batch_idx, data in enumerate(trainloader):
+
+        print(data)
+
         data_time.update(time.time() - end)
 
         update_lmo = False

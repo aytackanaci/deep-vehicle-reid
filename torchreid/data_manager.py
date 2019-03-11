@@ -4,7 +4,7 @@ from __future__ import print_function
 import os
 from torch.utils.data import DataLoader
 
-from .dataset_loader import ImageDataset, ImageLandmarksDataset, VideoDataset, MultiScaleImageDataset
+from .dataset_loader import ImageDataset, ImageLandmarksDataset, VideoDataset
 from .datasets import init_imgreid_dataset, init_vidreid_dataset
 from .transforms import build_transforms
 from .samplers import RandomIdentitySampler
@@ -35,7 +35,7 @@ class BaseDataManager(object):
 
         if landmarks:
             return self.trainloader_lm, self.trainloader, self.testloader_dict
-        
+
         return self.trainloader, self.testloader_dict
 
 
@@ -95,14 +95,15 @@ class ImageDataManager(BaseDataManager):
         if len(self.keypoints_dirs) != len(self.source_names):
             print('Warning! Keypoint directories given do not match number of source directories - keypoints not being used!')
             self.keypoints_dirs = ['']*len(self.source_names)
-        
+
         # Build train and test transform functions
         if scales is None:
-            transform_train = build_transforms(self.height, self.width, is_train=True)
-            transform_train_lm = build_transforms(self.height, self.width, is_train=True, inc_orient_lm=True)
-            transform_test = build_transforms(self.height, self.width, is_train=False)
+            transform_train = [build_transforms(self.height, self.width, is_train=True)]
+            transform_train_lm = [build_transforms(self.height, self.width, is_train=True, inc_orient_lm=True)]
+            transform_test = [build_transforms(self.height, self.width, is_train=False)]
         else:
             transform_train = [build_transforms(scale, scale, is_train=True) for scale in scales]
+            transform_train_lm = [build_transforms(scale, scale, is_train=True, inc_orient_lm=True) for scale in scales]
             transform_test = [build_transforms(scale, scale, is_train=False) for scale in scales]
 
 
@@ -121,7 +122,7 @@ class ImageDataManager(BaseDataManager):
             keypoints_dir = self.keypoints_dirs[idx]
             if os.path.exists(keypoints_dir):
                 use_keypoints = True
-            
+
             dataset = init_imgreid_dataset(
                 root=self.root, name=name, split_id=self.split_id, cuhk03_labeled=self.cuhk03_labeled,
                 cuhk03_classic_split=self.cuhk03_classic_split, val=self.val, keypoints_dir=keypoints_dir, regress_landmarks=regress_landmarks
@@ -150,7 +151,7 @@ class ImageDataManager(BaseDataManager):
         if self._num_train_landmarks > 0:
             print('Create an image landmarks dataset and a typical image dataset')
             if len(self.train) > 0:
-                imageDataset = ImageDataset(self.train, transform=transform_train)
+                imageDataset = ImageDataset(self.train, transforms=transform_train)
                 self.trainloader = DataLoader(imageDataset,
                                               batch_size=self.train_batch_size, shuffle=True,
                                               num_workers=self.workers, pin_memory=self.use_gpu,
@@ -158,21 +159,18 @@ class ImageDataManager(BaseDataManager):
             else:
                 self.trainloader = None
 
-            imageLandmarksDataset = ImageLandmarksDataset(self.train_lm, transform=transform_train_lm)
+            imageLandmarksDataset = ImageLandmarksDataset(self.train_lm, transforms=transform_train_lm)
 
             self.trainloader_lm = DataLoader(imageLandmarksDataset,
                 batch_size=self.train_batch_size, shuffle=True, num_workers=self.workers,
                 pin_memory=self.use_gpu, drop_last=True
             )
         else:
-            if scales is None:
-                print('Create an image dataset')
-                imageDataset = ImageDataset(self.train, transform=transform_train)
-            else:
-                imageDataset = MultiScaleImageDataset(self.train, transforms=transform_train)
+            print('Create an image dataset')
+            imageDataset = ImageDataset(self.train, transform=transform_train)
 
             self.trainloader_lm = None # No landmarks in train data so cannot create this loader
-            
+
             if self.train_sampler == 'RandomIdentitySampler':
                 self.trainloader = DataLoader(
                     imageDataset,
@@ -198,12 +196,8 @@ class ImageDataManager(BaseDataManager):
                 cuhk03_classic_split=self.cuhk03_classic_split, aic19_manual_labels=self.aic19_manual_labels, val=self.val, vehicleid_test_size=self.vehicleid_test_size,
             )
 
-            if scales is None:
-                queryImageDataset =   ImageDataset(dataset.query, transform=transform_test)
-                galleryImageDataset = ImageDataset(dataset.gallery, transform=transform_test)
-            else:
-                queryImageDataset =   MultiScaleImageDataset(dataset.query, transforms=transform_test)
-                galleryImageDataset = MultiScaleImageDataset(dataset.gallery, transforms=transform_test)
+            queryImageDataset =   ImageDataset(dataset.query, transforms=transform_test)
+            galleryImageDataset = ImageDataset(dataset.gallery, transforms=transform_test)
 
             self.testloader_dict[name]['query'] = DataLoader(
                 queryImageDataset,
