@@ -294,13 +294,13 @@ def train(epoch, model, criterion, optimizer, trainloader, use_gpu, fixbase=Fals
                 loss_landmarks = criterion['landmarks'](y_landmarks, plandmarks, one_hot=True)
 
         if feedback_consensus:
-            loss_consensus_id = criterion['id_soft'](y_id, y_consensus.detach())
+            loss_consensus_id = criterion['id_soft'](y_id, y_consensus)
             if train_scales:
-                loss_consensus_id_small = criterion['id_soft'](y_id_small, y_consensus.detach())
+                loss_consensus_id_small = criterion['id_soft'](y_id_small, y_consensus)
             if train_orient:
-                loss_consensus_orient = criterion['id_soft'](y_orient_id, y_consensus.detach())
+                loss_consensus_orient = criterion['id_soft'](y_orient_id, y_consensus)
             if train_landmarks:
-                loss_consensus_landmarks = criterion['id_soft'](y_landmarks_id, y_consensus.detach())
+                loss_consensus_landmarks = criterion['id_soft'](y_landmarks_id, y_consensus)
 
         loss_consensus_labels = criterion['id'](y_consensus, pids)
 
