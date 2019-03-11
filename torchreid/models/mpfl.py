@@ -23,6 +23,7 @@ class MPFL(nn.Module):
                  dropout_p=0.001,
                  train_orient=True,
                  train_landmarks=True,
+                 train_grayscale=False,
                  regress_landmarks=False,
                  **kwargs):
 
@@ -33,6 +34,7 @@ class MPFL(nn.Module):
         print(self.train_scales)
         self.train_orient = train_orient
         self.train_landmarks = train_landmarks
+        self.train_grayscale = train_grayscale
         self.regress_lms = regress_landmarks
 
         self.loss = loss
@@ -66,6 +68,15 @@ class MPFL(nn.Module):
             self.dropout_id_small = nn.Dropout(p=dropout_p, inplace=True)
             self.fc_id_small = nn.Linear(self.id_small_branch.last_conv_out_ch, self.num_classes)
 
+        if self.train_grayscale:
+            self.id_grayscale_branch = mobilenetv2ws(num_classes=num_classes,
+                                                     loss=loss,
+                                                     input_size=scales[0],
+                                                     pretrained=pretrained)
+            self.id_grayscale_branch.feature_extract_mode = True
+            self.dropout_id_grayscale = nn.Dropout(p=dropout_p, inplace=True)
+            self.fc_id_grayscale = nn.Linear(self.id_grayscale_branch.last_conv_out_ch, self.num_classes)
+
         if self.train_orient:
             self.orient_branch = mobilenetv2ws(num_classes=num_orients,
                                                loss=loss,
@@ -92,6 +103,8 @@ class MPFL(nn.Module):
         self.fusion_last_conv_out = self.id_branch.last_conv_out_ch
         if self.train_scales:
             self.fusion_last_conv_out += self.id_small_branch.last_conv_out_ch
+        if self.train_grayscale:
+            self.fusion_last_conv_out += self.id_grayscale_branch.last_conv_out_ch
         if self.train_orient:
             self.fusion_last_conv_out += self.orient_branch.last_conv_out_ch
         if self.train_landmarks:
@@ -142,7 +155,7 @@ class MPFL(nn.Module):
                 if m.bias is not None:
                     init.constant_(m.bias, 0)
 
-    def forward(self, x1, x2=None):
+    def forward(self, x1, x2=None, x3=None):
 
         f_id = self.id_branch(x1)
         f_id = self.dropout_id(f_id)
@@ -155,6 +168,14 @@ class MPFL(nn.Module):
             y_id_small = self.fc_id_small(f_id_small)
         else:
             y_id_small = 0
+
+        if self.train_grayscale:
+            assert(x3 is not None, "Grayscale image required for training grayscale branch")
+            f_id_grayscale = self.id_grayscale_branch(x3)
+            f_id_grayscale = self.dropout_id_grayscale(f_id_grayscale)
+            y_id_grayscale = self.fc_id_grayscale(f_id_grayscale)
+        else:
+            y_id_grayscale = 0
 
         if self.train_orient:
             f_orient = self.orient_branch(x1)
@@ -178,6 +199,8 @@ class MPFL(nn.Module):
 
         if self.train_scales:
             f_fusion = torch.cat([f_fusion, f_id_small], 1)
+        if self.train_grayscale:
+            f_fusion = torch.cat([f_fusion, f_id_grayscale], 1)
         if self.train_orient:
             f_fusion = torch.cat([f_fusion, f_orient], 1)
         if self.train_landmarks:
@@ -191,7 +214,7 @@ class MPFL(nn.Module):
         y_consensus = self.fc_consensus(f_fusion)
 
         if self.loss == {'xent'}:
-            return y_id, y_id_small, y_orient, y_landmarks, y_orient_id, y_landmarks_id, y_consensus
+            return y_id, y_id_small, y_id_grayscale, y_orient, y_landmarks, y_orient_id, y_landmarks_id, y_consensus
         else:
             raise KeyError("Unsupported loss: {}".format(self.loss))
 
