@@ -27,7 +27,7 @@ from torchreid.utils.generaltools import set_random_seed
 from torchreid.eval_metrics import evaluate, accuracy
 from torchreid.optimizers import init_optimizer
 
-def exp_name(cfg, train_o, train_l, train_s, train_g, dropout):
+def exp_name(cfg, train_o, train_l, train_s, train_g, dropout, criterion):
     name = [
         'e_' + cfg.prefix,
         'S_' + '-'.join(cfg.source_names),
@@ -35,32 +35,34 @@ def exp_name(cfg, train_o, train_l, train_s, train_g, dropout):
         cfg.arch,
         'E',
         '' if cfg.resume == '' else 'r',
-        '' if cfg.fixbase_epoch is not 0 else 'warmup' + str(cfg.fixbase_epoch),
+        '' if cfg.fixbase_epoch is not 0 else 'w' + str(cfg.fixbase_epoch),
         str(cfg.stepsize),
         'm' + str(cfg.max_epoch),
         'P',
         'b' + str(cfg.train_batch_size),
         cfg.optim,
         'lr' + str(cfg.lr),
-        'wd' + str(cfg.weight_decay),
+        #'wd' + str(cfg.weight_decay),
         'do' + str(dropout),
         'o' + str(train_o),
         'lm' + str(train_l),
         'lmR' if cfg.regress_landmarks else 'lmC',
         's' + str(train_s),
-        'g' + str(train_g)
+        'g' + str(train_g),
+        criterion
         ]
 
     return '_'.join(name)
 
 
-train_scales = True
+train_scales=False
 train_grayscale=False
 train_orient=True
-train_landmarks=True
+train_landmarks=False
+soft_criterion = 'xent' # or kldiv
 
 def main():
-    global args, train_orient, train_landmarks, train_scales, train_grayscale
+    global args, train_orient, train_landmarks, train_scales, train_grayscale, soft_criterion
 
     # read config
     parser = argument_parser()
@@ -81,7 +83,7 @@ def main():
         print('Training only ID and landmark branches')
         train_orient=False
 
-    args.save_dir = exp_name(args, train_orient, train_landmarks, train_scales, train_grayscale, dropout)
+    args.save_dir = exp_name(args, train_orient, train_landmarks, train_scales, train_grayscale, dropout, soft_criterion)
 
     set_random_seed(args.seed)
     if not args.use_avai_gpus: os.environ['CUDA_VISIBLE_DEVICES'] = args.gpu_devices
@@ -105,7 +107,6 @@ def main():
     print("Initializing Landmarks data manager")
     dm = ImageDataManager(use_gpu, scales=scales, grayscale=train_grayscale, **image_dataset_kwargs(args))
     trainloader_lm, trainloader, testloader_dict = dm.return_dataloaders(landmarks=True)
-    # sys.exit(0)
 
     if not trainloader_lm:
         print('Warning: landmarks train loader not given, only id labels will be used for training')
@@ -117,9 +118,17 @@ def main():
 
     criterion = {}
     criterion['id'] = CrossEntropyLoss(num_classes=dm.num_train_pids, use_gpu=use_gpu, label_smooth=args.label_smooth)
-    criterion['id_soft'] = KLDivLoss(num_classes=dm.num_train_pids, use_gpu=use_gpu, label_smooth=False)
     criterion['orient'] = CrossEntropyLoss(num_classes=dm.num_train_orients, use_gpu=use_gpu, label_smooth=args.label_smooth)
-    criterion['landmarks'] = CrossEntropyLoss(num_classes=dm.num_train_landmarks, use_gpu=use_gpu, label_smooth=args.label_smooth)
+    criterion['landmarks'] = CrossEntropyLoss(num_classes=dm.num_train_landmarks, use_gpu=use_gpu, label_smooth=args.label_smooth, multiclass=True)
+
+    if soft_criterion == 'kldiv':
+        criterion['id_soft'] = KLDivLoss(num_classes=dm.num_train_pids, use_gpu=use_gpu, label_smooth=False)
+    elif soft_criterion == 'xent':
+        criterion['id_soft'] = CrossEntropyLoss(num_classes=dm.num_train_pids, use_gpu=use_gpu, label_smooth=False, multiclass=True, soft_targets=True)
+    else:
+        print('Unrecognised soft label loss function. Please choose either kldiv or xent.')
+        sys.exit(0)
+
     optimizer = init_optimizer(model.parameters(), **optimizer_kwargs(args))
     scheduler = lr_scheduler.MultiStepLR(optimizer, milestones=args.stepsize, gamma=args.gamma)
     # scheduler = lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.1, patience=3, verbose=True, threshold=1e-04)
@@ -323,7 +332,7 @@ def train(epoch, model, criterion, optimizer, trainloader, use_gpu, fixbase=Fals
         if train_landmarks:
             total_loss_landmarks = criterion['id'](y_landmarks_id, pids)
             if update_lmo:
-                total_loss_landmarks += criterion['landmarks'](y_landmarks, plandmarks, one_hot=True)
+                total_loss_landmarks += criterion['landmarks'](y_landmarks, plandmarks)
             if feedback_consensus:
                 total_loss_landmarks += criterion['id_soft'](y_landmarks_id, y_consensus)
 
@@ -434,6 +443,9 @@ def test(model, test_set, name, queryloader, galleryloader, use_gpu, ranks=[1, 5
               torch.pow(gf, 2).sum(dim=1, keepdim=True).expand(n, m).t()
     distmat.addmm_(1, -2, qf, gf.t())
     distmat = distmat.numpy()
+
+    print(q_pids, g_pids)
+    print(q_camids, g_camids)
 
     print("Computing CMC and mAP")
     cmc, mAP, all_AP = evaluate(distmat, q_pids, g_pids, q_camids, g_camids, use_metric_cuhk03=args.use_metric_cuhk03)
