@@ -58,7 +58,7 @@ def exp_name(cfg, train_o, train_l, train_s, train_g, dropout, criterion):
 train_scales=False
 train_grayscale=False
 train_orient=True
-train_landmarks=False
+train_landmarks=True
 soft_criterion='xent' # or kldiv
 
 def main():
@@ -447,9 +447,6 @@ def test(model, test_set, name, queryloader, galleryloader, use_gpu, ranks=[1, 5
               torch.pow(gf, 2).sum(dim=1, keepdim=True).expand(n, m).t()
     distmat.addmm_(1, -2, qf, gf.t())
     distmat = distmat.numpy()
-
-    print(q_pids, g_pids)
-    print(q_camids, g_camids)
 
     print("Computing CMC and mAP")
     cmc, mAP, all_AP = evaluate(distmat, q_pids, g_pids, q_camids, g_camids, use_metric_cuhk03=args.use_metric_cuhk03)
