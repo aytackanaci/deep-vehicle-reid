@@ -31,7 +31,7 @@ def argument_parser():
                         help="Prefix for experiment")
     parser.add_argument('--keypoints-dirs', type=str, default='', nargs='+',
                         help="Directories for keypoints for source datasets if available. Pass zero if not available")
-    
+
     # ************************************************************
     # Video datasets
     # ************************************************************
@@ -165,7 +165,7 @@ def argument_parser():
                         help="MPFL specific: train only ID and orient branches")
     parser.add_argument('--use-landmarks-only', action='store_true',
                         help="MPFL specific: train only ID and landmarks branches")
-    parser.add_argument('--regress_landmarks', action='store_true',
+    parser.add_argument('--regress-landmarks', action='store_true',
                         help="MPFL specific: regress landmark positions rather than classify presence only")
     return parser
 

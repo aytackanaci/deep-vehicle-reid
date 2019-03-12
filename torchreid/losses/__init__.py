@@ -4,6 +4,7 @@ from __future__ import print_function
 
 from .cross_entropy_loss import CrossEntropyLoss
 from .kl_div_loss import KLDivLoss
+from .mean_squared_error_loss import SelectedMSELoss
 from .hard_mine_triplet_loss import TripletLoss
 from .center_loss import CenterLoss
 from .ring_loss import RingLoss
