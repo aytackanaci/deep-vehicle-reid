@@ -17,7 +17,7 @@ from torch.nn import functional as F
 from args import argument_parser, image_dataset_kwargs, optimizer_kwargs
 from torchreid.data_manager import ImageDataManager
 from torchreid import models
-from torchreid.losses import CrossEntropyLoss, DeepSupervision, KLDivLoss
+from torchreid.losses import CrossEntropyLoss, DeepSupervision, KLDivLoss, SelectedMSELoss
 from torchreid.utils.iotools import save_checkpoint, check_isfile
 from torchreid.utils.avgmeter import AverageMeter
 from torchreid.utils.loggers import Logger, RankLogger
@@ -50,7 +50,7 @@ def exp_name(cfg, train_o, train_l, train_s, train_g, dropout, criterion):
         's' + str(train_s),
         'g' + str(train_g),
         criterion
-        ]
+    ]
 
     return '_'.join(name)
 
@@ -59,7 +59,7 @@ train_scales=False
 train_grayscale=False
 train_orient=True
 train_landmarks=False
-soft_criterion = 'xent' # or kldiv
+soft_criterion='xent' # or kldiv
 
 def main():
     global args, train_orient, train_landmarks, train_scales, train_grayscale, soft_criterion
@@ -119,7 +119,11 @@ def main():
     criterion = {}
     criterion['id'] = CrossEntropyLoss(num_classes=dm.num_train_pids, use_gpu=use_gpu, label_smooth=args.label_smooth)
     criterion['orient'] = CrossEntropyLoss(num_classes=dm.num_train_orients, use_gpu=use_gpu, label_smooth=args.label_smooth)
-    criterion['landmarks'] = CrossEntropyLoss(num_classes=dm.num_train_landmarks, use_gpu=use_gpu, label_smooth=args.label_smooth, multiclass=True)
+
+    if args.regress_landmarks:
+        criterion['landmarks'] = SelectedMSELoss(use_gpu=use_gpu)
+    else:
+        criterion['landmarks'] = CrossEntropyLoss(num_classes=dm.num_train_landmarks, use_gpu=use_gpu, label_smooth=args.label_smooth, multiclass=True)
 
     if soft_criterion == 'kldiv':
         criterion['id_soft'] = KLDivLoss(num_classes=dm.num_train_pids, use_gpu=use_gpu, label_smooth=False)
