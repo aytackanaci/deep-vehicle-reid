@@ -84,7 +84,9 @@ def main():
     print("Model size: {:.3f} M".format(count_num_param(model)))
     # print(model)
 
-    criterion = CrossEntropyLoss(num_classes=dm.num_train_pids, use_gpu=use_gpu, label_smooth=args.label_smooth)
+    criterion = {}
+    criterion['hard'] = CrossEntropyLoss(num_classes=dm.num_train_pids, use_gpu=use_gpu, label_smooth=args.label_smooth)
+    criterion['soft'] = CrossEntropyLoss(num_classes=dm.num_train_pids, use_gpu=use_gpu, label_smooth=args.label_smooth, multiclass=True, soft_targets=True)
     optimizer = init_optimizer(model.parameters(), **optimizer_kwargs(args))
     scheduler = lr_scheduler.MultiStepLR(optimizer, milestones=args.stepsize, gamma=args.gamma)
     # # scheduler = lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.1, patience=3, verbose=True, threshold=1e-04)
@@ -230,13 +232,12 @@ def train(epoch, model, criterion, optimizer, trainloader, writer, use_gpu, fixb
 
         y_large, y_small, y_joint = model(img1, img2)
 
-        loss_large = criterion(y_large, pids)
-        loss_small = criterion(y_small, pids)
-        loss_joint = criterion(y_joint, pids)
+        loss_large = criterion['hard'](y_large, pids)
+        loss_small = criterion['hard'](y_small, pids)
+        loss_joint = criterion['hard'](y_joint, pids)
 
-        joint_prob = F.softmax(y_joint, dim=1)
-        loss_joint_large = criterion(y_large, joint_prob, one_hot=True)
-        loss_joint_small = criterion(y_small, joint_prob, one_hot=True)
+        loss_joint_large = criterion['soft'](y_large, y_joint)
+        loss_joint_small = criterion['soft'](y_small, y_joint)
 
         total_loss_large = loss_large + loss_joint_large #+
         total_loss_small = loss_small + loss_joint_small #+
