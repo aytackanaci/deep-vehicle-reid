@@ -4,14 +4,16 @@ from __future__ import division
 import torch
 import torch.nn as nn
 
-
 class SelectedMSELoss(nn.Module):
 
     "Mean squared error loss calculated from selected elements."
 
-    def __init__(self, use_gpu=True):
-        super(MSELoss, self).__init__()
+    def __init__(self, batch_size, im_size, use_gpu=True):
+        super(SelectedMSELoss, self).__init__()
         self.use_gpu = use_gpu
+        self.mse_loss = nn.MSELoss(reduction='none')
+        self.batch_size = batch_size
+        self.im_size = im_size
 
     def forward(self, inputs, targets):
         """
@@ -20,7 +22,10 @@ class SelectedMSELoss(nn.Module):
         - targets: ground truth labels with shape (num_classes)
         """
         if self.use_gpu: targets = targets.cuda()
-        losses = nn.MSELoss(inputs, targets, reduction='none')
-        loss = torch.mean(losses.index_select(targets == 0))
+        losses = self.mse_loss(inputs, targets)
+
+        # Only sum losses for landmarks that are present in the target
+        mask = targets.gt(0.0)
+        loss = torch.masked_select(losses,mask).sum()/(self.batch_size*self.im_size**2)
 
         return loss

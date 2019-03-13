@@ -100,20 +100,20 @@ class ImageDataManager(BaseDataManager):
         # Build train and test transform functions
         if scales is None:
             transform_train = [build_transforms(self.height, self.width, is_train=True)]
-            transform_train_lm = [build_transforms(self.height, self.width, is_train=True, inc_orient_lm=True)]
+            transform_train_lm = [build_transforms(self.height, self.width, is_train=True, inc_orient_lm=True, regress_landmarks=regress_landmarks)]
             transform_test = [build_transforms(self.height, self.width, is_train=False)]
             height = self.height
             width = self.width
         else:
             transform_train = [build_transforms(scale, scale, is_train=True) for scale in scales]
-            transform_train_lm = [build_transforms(scale, scale, is_train=True, inc_orient_lm=True) for scale in scales]
+            transform_train_lm = [build_transforms(scale, scale, is_train=True, inc_orient_lm=True, regress_landmarks=regress_landmarks) for scale in scales]
             transform_test = [build_transforms(scale, scale, is_train=False) for scale in scales]
             height = scales[0]
             width = scales[0]
 
         if grayscale:
             transform_train.append(build_transforms(height, width, is_train=True, grayscale=True))
-            transform_train_lm.append(build_transforms(height, width, is_train=True, inc_orient_lm=True, grayscale=True))
+            transform_train_lm.append(build_transforms(height, width, is_train=True, inc_orient_lm=True, regress_landmarks=regress_landmarks, grayscale=True))
             transform_test.append(build_transforms(height, width, is_train=False, grayscale=True))
 
         print("=> Initializing TRAIN (source) datasets")

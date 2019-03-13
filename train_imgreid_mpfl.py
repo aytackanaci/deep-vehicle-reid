@@ -125,7 +125,7 @@ def main():
     criterion['orient'] = CrossEntropyLoss(num_classes=dm.num_train_orients, use_gpu=use_gpu, label_smooth=args.label_smooth, weighting=4)
 
     if args.regress_landmarks:
-        criterion['landmarks'] = SelectedMSELoss(use_gpu=use_gpu)
+        criterion['landmarks'] = SelectedMSELoss(args.train_batch_size, scales[0], use_gpu=use_gpu)
     else:
         criterion['landmarks'] = CrossEntropyLoss(num_classes=dm.num_train_landmarks, use_gpu=use_gpu, label_smooth=args.label_smooth, multiclass=True, multilabel=True, weighting=10)
 
@@ -332,8 +332,10 @@ def train(epoch, model, criterion, optimizer, trainloader, use_gpu, fixbase=Fals
 
         if train_orient:
             total_loss_orient = criterion['id'](y_orient_id, pids)
+
             if update_lmo:
                 total_loss_orient += criterion['orient'](y_orient, porient)
+
             if feedback_consensus:
                 total_loss_orient += criterion['id_soft'](y_orient_id, y_consensus)
 
