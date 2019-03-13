@@ -127,7 +127,7 @@ def main():
     if args.regress_landmarks:
         criterion['landmarks'] = SelectedMSELoss(use_gpu=use_gpu)
     else:
-        criterion['landmarks'] = CrossEntropyLoss(num_classes=dm.num_train_landmarks, use_gpu=use_gpu, label_smooth=args.label_smooth, multiclass=True)
+        criterion['landmarks'] = CrossEntropyLoss(num_classes=dm.num_train_landmarks, use_gpu=use_gpu, label_smooth=args.label_smooth, multiclass=True, multilabel=True)
 
     if soft_criterion == 'kldiv':
         criterion['id_soft'] = KLDivLoss(num_classes=dm.num_train_pids, use_gpu=use_gpu, label_smooth=False)
