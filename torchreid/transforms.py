@@ -47,9 +47,8 @@ def flip_orient(orient):
         return (orient-3)
 
 def flip_landmarks(landmarks, im_size):
-    im_centre = np.array(im_size)/2
-
-    #TODO!!!
+    # Only flip horizontally (i.e. x coordinates)
+    landmarks[range(0,len(landmarks),2)] = list(map(lambda x: im_size[0]-x if x>0 else 0.0, landmarks[range(0,len(landmarks),2)]))
     return landmarks
 
 def class_landmarks(landmarks):
