@@ -108,8 +108,12 @@ def main():
     dm = ImageDataManager(use_gpu, scales=scales, grayscale=train_grayscale, **image_dataset_kwargs(args))
     trainloader_lm, trainloader, testloader_dict = dm.return_dataloaders(landmarks=True)
 
-    if not trainloader_lm:
-        print('Warning: landmarks train loader not given, only id labels will be used for training')
+    if trainloader_lm is None:
+        if trainloader is None:
+            print('Error! No training data given!')
+            sys.exit(0)
+        else:
+            print('Warning: landmarks train loader not given, only id labels will be used for training')
 
     print("Initializing model: {}".format(args.arch))
     model = models.init_model(name=args.arch, num_classes=dm.num_train_pids, num_orients=dm.num_train_orients, num_landmarks=dm.num_train_landmarks, input_size=args.width, loss={'xent'}, use_gpu=use_gpu, train_orient=train_orient, train_landmarks=train_landmarks, regress_landmarks=args.regress_landmarks, dropout=dropout, scales=scales, train_grayscale=train_grayscale)
@@ -184,7 +188,8 @@ def main():
 
         for epoch in range(args.fixbase_epoch):
             start_train_time = time.time()
-            loss, prec1 = train(epoch, model, criterion, optimizer, trainloader_lm, use_gpu, fixbase=True)
+            if trainloader_lm:
+                loss, prec1 = train(epoch, model, criterion, optimizer, trainloader_lm, use_gpu, fixbase=True)
             if trainloader:
                 loss, prec1 = train(epoch, model, criterion, optimizer, trainloader, use_gpu, fixbase=True)
             print('Epoch: [{:02d}] [Average Loss:] {:.4f}\t [Average Prec.:] {:.2%}'.format(epoch+1, loss, prec1))
@@ -197,7 +202,8 @@ def main():
     for epoch in range(args.start_epoch, args.max_epoch):
         start_train_time = time.time()
         print('Training on landmark data')
-        loss, prec1 = train(epoch, model, criterion, optimizer, trainloader_lm, use_gpu, feedback_consensus=feedback_consensus)
+        if trainloader_lm:
+            loss, prec1 = train(epoch, model, criterion, optimizer, trainloader_lm, use_gpu, feedback_consensus=feedback_consensus)
         if trainloader:
             print('Training on non-landmark data')
             loss, prec1 = train(epoch, model, criterion, optimizer, trainloader, use_gpu, feedback_consensus=feedback_consensus)
