@@ -29,9 +29,7 @@ class MPFL(nn.Module):
 
         super(MPFL, self).__init__()
 
-        print('scales:',scales)
         self.train_scales = len(scales) > 1
-        print(self.train_scales)
         self.train_orient = train_orient
         self.train_landmarks = train_landmarks
         self.train_grayscale = train_grayscale
@@ -90,11 +88,11 @@ class MPFL(nn.Module):
         if self.train_landmarks:
             self.landmarks_branch = mobilenetv2ws(num_classes=num_landmarks,
                                                   loss=loss,
-                                                  input_size=scales[1],
+                                                  input_size=scales[0],
                                                   pretrained=pretrained)
             self.landmarks_branch.feature_extract_mode = True
-            self.fc_landmarks = nn.Linear(self.landmarks_branch.last_conv_out_ch, self.num_landmarks)
             self.dropout_landmarks = nn.Dropout(p=dropout_p, inplace=True)
+            self.fc_landmarks = nn.Linear(self.landmarks_branch.last_conv_out_ch, self.num_landmarks)
             self.fc_landmarks_id = nn.Linear(self.landmarks_branch.last_conv_out_ch, self.num_classes)
 
         self.dropout_consensus = nn.Dropout(p=dropout_p, inplace=True)
