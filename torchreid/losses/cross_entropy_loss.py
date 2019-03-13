@@ -3,6 +3,7 @@ from __future__ import division
 
 import torch
 import torch.nn as nn
+from torch.nn import functional as F
 
 
 class CrossEntropyLoss(nn.Module):
@@ -19,7 +20,7 @@ class CrossEntropyLoss(nn.Module):
     - use_gpu (bool): whether to use gpu devices
     - label_smooth (bool): whether to apply label smoothing, if False, epsilon = 0
     """
-    def __init__(self, num_classes, epsilon=0.1, use_gpu=True, label_smooth=True, multiclass=False, soft_targets=False):
+    def __init__(self, num_classes, epsilon=0.1, use_gpu=True, label_smooth=True, multiclass=False, soft_targets=False, multilabel=False):
         super(CrossEntropyLoss, self).__init__()
         self.num_classes = num_classes
         self.epsilon = epsilon if label_smooth else 0
@@ -27,6 +28,7 @@ class CrossEntropyLoss(nn.Module):
         self.logsoftmax = nn.LogSoftmax(dim=1)
         self.multiclass = multiclass
         self.soft_targets = soft_targets
+        self.multilabel = multilabel
 
         if self.soft_targets and not self.multiclass:
             print('Warning: soft targets should also be multiclass. Softmax will not be applied otherwise')
@@ -42,8 +44,12 @@ class CrossEntropyLoss(nn.Module):
             targets = torch.zeros(log_probs.size()).scatter_(1, targets.unsqueeze(1).data.cpu(), 1)
             targets = (1 - self.epsilon) * targets + self.epsilon / self.num_classes
         elif self.soft_targets:
-            targets = nn.functional.softmax(targets,dim=1)
+            targets = F.softmax(targets,dim=1)
 
         if self.use_gpu: targets = targets.cuda()
-        loss = (- targets * log_probs).mean(0).sum()
+
+        if self.multilabel:
+            loss = F.binary_cross_entropy_with_logits(inputs, targets)*10
+        else:
+            loss = (- targets * log_probs).mean(0).sum()
         return loss
