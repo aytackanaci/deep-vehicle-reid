@@ -21,7 +21,7 @@ def crop_image(img, width, height, resize_ratio, interpolation):
 
 # Transform the landmarks in the same way the image is cropped
 def stretch_and_crop_landmarks(landmarks, im_size, new_width, new_height, resize_ratio, x_start, y_start):
-    landmarks_t = landmarks
+    landmarks_t = landmarks.copy()
     landmarks_t[range(0,len(landmarks),2)] = landmarks[range(0,len(landmarks),2)]/im_size[0]*new_width*resize_ratio
     landmarks_t[range(1,len(landmarks)+1,2)] = landmarks[range(1,len(landmarks)+1,2)]/im_size[1]*new_height*resize_ratio
 
@@ -31,9 +31,12 @@ def stretch_and_crop_landmarks(landmarks, im_size, new_width, new_height, resize
         if landmarks[idx] == -1 or \
            l_x < x_start or l_y < y_start or \
            l_x > (x_start+new_width) or l_y > (y_start+new_height):
-            landmarks_t[idx:idx+2] = 0
+            landmarks_t[idx:idx+2] = 0.0
+        else:
+            l_x -= x_start
+            l_y -= y_start
 
-    return landmarks_t
+    return np.array(list(landmarks_t))
 
 def flip_orient(orient):
     if orient < 2:
@@ -88,7 +91,7 @@ class Random2DTranslationLabels(Random2DTranslation):
 
         if random.uniform(0, 1) > self.p:
             cropped_img = img.resize((self.width, self.height), self.interpolation)
-            landmarks_t = stretch_and_crop_landmarks(landmarks, img.size, self.width, self.height, 0, 0, 0)
+            landmarks_t = stretch_and_crop_landmarks(landmarks, img.size, self.width, self.height, 1, 0, 0)
         else:
             cropped_img, x, y = crop_image(img, self.width, self.height, self.resize_ratio, self.interpolation)
             landmarks_t = stretch_and_crop_landmarks(landmarks, img.size, self.width, self.height, self.resize_ratio, x, y)
