@@ -77,6 +77,9 @@ class ImageLandmarksDataset(Dataset):
             imgs, orients, landmark_sets = (), (), ()
             for transform in self.transforms:
                 img_new, orient_new, landmarks_new = transform((img, orient, landmarks))
+                if len(landmarks_new) != self.num_landmarks:
+                    print('Warning! Number of transformed landmarks for',landmarks,'is',len(landmarks_new),'should be',self.num_landmarks,'- landmark labels will be removed')
+                    landmarks_new = np.ones(self.num_landmarks,dtype=self.landmarks_type)*-1
                 imgs = imgs + (img_new,)
                 orients = orients + (orient_new,)
                 landmark_sets = landmark_sets + (landmarks_new,)
