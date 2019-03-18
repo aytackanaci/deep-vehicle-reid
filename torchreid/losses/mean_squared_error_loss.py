@@ -25,7 +25,8 @@ class SelectedMSELoss(nn.Module):
         losses = self.mse_loss(inputs, targets)
 
         # Only sum losses for landmarks that are present in the target
+        # Divide through by the average number of examples present for each landmark
         mask = targets.gt(0.0)
-        loss = torch.masked_select(losses,mask).sum()/(self.batch_size*self.im_size**2)
+        loss = torch.masked_select(losses,mask).sum()/(mask.sum(0).float().mean()*self.im_size**2)
 
         return loss
