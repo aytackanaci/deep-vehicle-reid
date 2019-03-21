@@ -56,7 +56,7 @@ def exp_name(cfg, train_o, train_l, train_s, train_g, dropout, criterion):
 
 
 train_scales=False
-train_grayscale=False
+train_grayscale=True
 train_orient=True
 train_landmarks=True
 soft_criterion='xent' # or kldiv
@@ -122,12 +122,12 @@ def main():
 
     criterion = {}
     criterion['id'] = CrossEntropyLoss(num_classes=dm.num_train_pids, use_gpu=use_gpu, label_smooth=args.label_smooth)
-    criterion['orient'] = CrossEntropyLoss(num_classes=dm.num_train_orients, use_gpu=use_gpu, label_smooth=args.label_smooth, weighting=4)
+    criterion['orient'] = CrossEntropyLoss(num_classes=dm.num_train_orients, use_gpu=use_gpu, label_smooth=args.label_smooth, weighting=1)
 
     if args.regress_landmarks:
         criterion['landmarks'] = SelectedMSELoss(args.train_batch_size, scales[0], use_gpu=use_gpu)
     else:
-        criterion['landmarks'] = CrossEntropyLoss(num_classes=dm.num_train_landmarks, use_gpu=use_gpu, label_smooth=args.label_smooth, multiclass=True, multilabel=True, weighting=10)
+        criterion['landmarks'] = CrossEntropyLoss(num_classes=dm.num_train_landmarks, use_gpu=use_gpu, label_smooth=args.label_smooth, multiclass=True, multilabel=True, weighting=1)
 
     if soft_criterion == 'kldiv':
         criterion['id_soft'] = KLDivLoss(num_classes=dm.num_train_pids, use_gpu=use_gpu, label_smooth=False)
