@@ -25,6 +25,7 @@ class MPFL(nn.Module):
                  train_landmarks=True,
                  train_grayscale=False,
                  regress_landmarks=False,
+                 fc_dims=None,
                  **kwargs):
 
         super(MPFL, self).__init__()
@@ -107,7 +108,13 @@ class MPFL(nn.Module):
             self.fusion_last_conv_out += self.orient_branch.last_conv_out_ch
         if self.train_landmarks:
             self.fusion_last_conv_out += self.landmarks_branch.last_conv_out_ch
-        self.fc_consensus = nn.Linear(self.fusion_last_conv_out, self.num_classes)
+
+        if fc_dims is not None:
+            self.fc_consensus = self._construct_fc_layer(fc_dims, self.fusion_last_conv_out, dropout_p=dropout_p)
+            self.fc_consensus_out = nn.Linear(fc_dims[-1], self.num_classes)
+        else:
+            self.fc_consensus = None
+            self.fc_consensus_out = nn.Linear(self.fusion_last_conv_out, self.num_classes)
 
         self.init_params()
 
@@ -209,7 +216,9 @@ class MPFL(nn.Module):
         if not self.training:
             return f_fusion
 
-        y_consensus = self.fc_consensus(f_fusion)
+        if self.fc_consensus:
+            f_fusion = self.fc_consensus(f_fusion)
+        y_consensus = self.fc_consensus_out(f_fusion)
 
         if self.loss == {'xent'}:
             return y_id, y_id_small, y_id_grayscale, y_orient, y_landmarks, y_orient_id, y_landmarks_id, y_consensus

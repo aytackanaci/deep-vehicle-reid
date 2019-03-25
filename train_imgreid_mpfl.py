@@ -27,7 +27,7 @@ from torchreid.utils.generaltools import set_random_seed
 from torchreid.eval_metrics import evaluate, accuracy
 from torchreid.optimizers import init_optimizer
 
-def exp_name(cfg, train_o, train_l, train_s, train_g, dropout, criterion):
+def exp_name(cfg, train_o, train_l, train_s, train_g, dropout, criterion, fc_dims):
     name = [
         'e_' + cfg.prefix,
         'S_' + '-'.join(cfg.source_names),
@@ -49,20 +49,22 @@ def exp_name(cfg, train_o, train_l, train_s, train_g, dropout, criterion):
         'lmR' if cfg.regress_landmarks else 'lmC',
         's' + str(train_s),
         'g' + str(train_g),
-        criterion
+        criterion,
+        '' if fc_dims is None else 'fcs' + '-'.join(str(x) for x in fc_dims)
     ]
 
     return '_'.join(name)
 
 
 train_scales=False
-train_grayscale=True
+train_grayscale=False
 train_orient=True
 train_landmarks=True
 soft_criterion='xent' # or kldiv
+fc_dims=[1024] # None for no extra fc fusion layers
 
 def main():
-    global args, train_orient, train_landmarks, train_scales, train_grayscale, soft_criterion
+    global args, train_orient, train_landmarks, train_scales, train_grayscale, soft_criterion, fc_dims
 
     # read config
     parser = argument_parser()
@@ -83,7 +85,7 @@ def main():
         print('Training only ID and landmark branches')
         train_orient=False
 
-    args.save_dir = exp_name(args, train_orient, train_landmarks, train_scales, train_grayscale, dropout, soft_criterion)
+    args.save_dir = exp_name(args, train_orient, train_landmarks, train_scales, train_grayscale, dropout, soft_criterion, fc_dims)
 
     set_random_seed(args.seed)
     if not args.use_avai_gpus: os.environ['CUDA_VISIBLE_DEVICES'] = args.gpu_devices
@@ -116,7 +118,7 @@ def main():
             print('Warning: landmarks train loader not given, only id labels will be used for training')
 
     print("Initializing model: {}".format(args.arch))
-    model = models.init_model(name=args.arch, num_classes=dm.num_train_pids, num_orients=dm.num_train_orients, num_landmarks=dm.num_train_landmarks, input_size=args.width, loss={'xent'}, use_gpu=use_gpu, train_orient=train_orient, train_landmarks=train_landmarks, regress_landmarks=args.regress_landmarks, dropout=dropout, scales=scales, train_grayscale=train_grayscale)
+    model = models.init_model(name=args.arch, num_classes=dm.num_train_pids, num_orients=dm.num_train_orients, num_landmarks=dm.num_train_landmarks, input_size=args.width, loss={'xent'}, use_gpu=use_gpu, train_orient=train_orient, train_landmarks=train_landmarks, regress_landmarks=args.regress_landmarks, dropout=dropout, scales=scales, train_grayscale=train_grayscale, fc_dims=fc_dims)
     print("Model size: {:.3f} M".format(count_num_param(model)))
     print(model)
 
