@@ -213,11 +213,12 @@ class MPFL(nn.Module):
 
         f_fusion = self.dropout_consensus(f_fusion)
 
+        if self.fc_consensus:
+            f_fusion = self.fc_consensus(f_fusion)
+
         if not self.training:
             return f_fusion
 
-        if self.fc_consensus:
-            f_fusion = self.fc_consensus(f_fusion)
         y_consensus = self.fc_consensus_out(f_fusion)
 
         if self.loss == {'xent'}:
