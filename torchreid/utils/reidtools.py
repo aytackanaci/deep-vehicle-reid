@@ -28,15 +28,14 @@ def visualize_ranked_results(distmat, all_AP, dataset, dataset_name, save_path, 
     query, gallery = dataset
     assert num_q == len(query)
     assert num_g == len(gallery)
-    save_html = True
 
 
     print("Visualizing top-{} ranks".format(topk))
     print("# query: {}\n# gallery {}".format(num_q, num_g))
-    print("Saving images to '{}'".format(save_path))
+    print("Saving visualzation and results to '{}'".format(save_path))
 
     # HELPERS
-    def _printHtml(querys, ranks, data_root, f):
+    def _print_html(querys, ranks, f):
         header = '''
         <html>
             <head>
@@ -84,7 +83,7 @@ def visualize_ranked_results(distmat, all_AP, dataset, dataset_name, save_path, 
             f.write('</td>\n')
 
             f.write('<td>')
-            for image, hit in ranks[i]:
+            for g_idx, image, hit in ranks[i]:
                 c = 'hit' if hit else 'not'
                 f.write(im_template.format(image, c, image))
             f.write('</td>\n')
@@ -93,6 +92,15 @@ def visualize_ranked_results(distmat, all_AP, dataset, dataset_name, save_path, 
 
         f.write('</tbody>\n')
         f.write(footer)
+
+    def _save_txt(querys, ranks, f):
+        # go through all querys
+        for i, q in enumerate(query):
+
+            c_ranks = [str(g_idx+1) for (g_idx, _, _) in ranks[i]] # test IDs start from 1
+            line = ' '.join(c_ranks)
+            f.write(line)
+            f.write('\n')
 
     def _cp_img_to(src, dst, rank, prefix):
         """
@@ -133,17 +141,19 @@ def visualize_ranked_results(distmat, all_AP, dataset, dataset_name, save_path, 
             if not invalid:
                 # _cp_img_to(gimg_path, qdir, rank=rank_idx, prefix='gallery')
                 rank_idx += 1
-                hitOrNot.append( (gimg_path, qpid == gpid) )
+                hitOrNot.append( (g_idx, gimg_path, qpid == gpid) )
                 if rank_idx > topk:
                     g_ranks.append( hitOrNot )
                     break
 
+    assert len(query) == len(g_ranks)
 
-    if save_html:
-        assert len(query) == len(g_ranks)
-        html_out = osp.join(save_path, '{}_ranks.html'.format(dataset_name))
-        with open(html_out, 'w') as fout:
-            _printHtml(query, g_ranks, '', fout)
+    txt_out = osp.join(save_path, '{}.txt'.format(dataset_name))
+    with open(txt_out, 'w') as fout:
+        _save_txt(query, g_ranks, fout)
+
+    html_out = osp.join(save_path, '{}_ranks.html'.format(dataset_name))
+    with open(html_out, 'w') as fout:
+        _print_html(query, g_ranks, fout)
 
     print("Done")
-
