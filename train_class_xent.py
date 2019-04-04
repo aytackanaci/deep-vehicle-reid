@@ -138,7 +138,7 @@ def main():
     for epoch in range(args.start_epoch, args.max_epoch):
         start_train_time = time.time()
         loss, prec1 = train(epoch, model, criterion, optimizer, trainloader, use_gpu)
-        print('Epoch: [{:02d}] [Average Loss:] {:.4f}\t [Train Acc.:] {:.2%}'.format(epoch+1, loss, prec1), end='')
+        print('Epoch: [{:02d}] [Average Loss:] {:.4f}\t [Train Acc.:] {:.2f}'.format(epoch+1, loss, prec1), end='')
         train_time += round(time.time() - start_train_time)
 
 
@@ -182,7 +182,7 @@ def main():
     elapsed = str(datetime.timedelta(seconds=elapsed))
     train_time = str(datetime.timedelta(seconds=train_time))
     print("Finished. Total elapsed time (h:m:s): {}. Training time (h:m:s): {}.".format(elapsed, train_time))
-    top1logger.show_summary()
+    # top1logger.show_summary()
 
 
 def train(epoch, model, criterion, optimizer, trainloader, use_gpu, fixbase=False):
@@ -214,7 +214,7 @@ def train(epoch, model, criterion, optimizer, trainloader, use_gpu, fixbase=Fals
         else:
             loss = criterion(outputs, pids)
 
-        prec, = accuracy(outputs.data, pids.data)
+        prec, = accuracy(outputs.data, pids.data, return_count=True)
         prec1 = prec[0]  # get top 1
 
         loss.backward()
@@ -222,8 +222,8 @@ def train(epoch, model, criterion, optimizer, trainloader, use_gpu, fixbase=Fals
 
         batch_time.update(time.time() - end)
 
-        losses.update(loss.item(), pids.size(0))
-        precisions.update(prec1, pids.size(0))
+        losses.update(loss.item())
+        precisions.update(prec1)
         num_correct += prec1
         num_total += imgs.size(0)
 
@@ -238,7 +238,7 @@ def train(epoch, model, criterion, optimizer, trainloader, use_gpu, fixbase=Fals
 
         end = time.time()
 
-    return losses.avg, num_correct / num_total
+    return losses.avg, 100 * num_correct / num_total
 
 
 def test(model, test_set, name, testloader, use_gpu, ranks=[1, 5], visualize=False):

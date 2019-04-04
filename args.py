@@ -96,7 +96,7 @@ def argument_parser():
 
     parser.add_argument('--always-fixbase', action='store_true',
                         help="always fix base network and only train specified layers")
-    parser.add_argument('--fixbase-epoch', type=int, default=10,
+    parser.add_argument('--fixbase-epoch', type=int, default=0,
                         help="how many epochs to fix base network (only train randomly initialized classifier)")
     parser.add_argument('--open-layers', type=str, nargs='+', default=['classifier'],
                         help="open specified layers for training while keeping others frozen")
@@ -133,7 +133,7 @@ def argument_parser():
                         help="load pretrained weights but ignore layers that don't match in size")
     parser.add_argument('--evaluate', action='store_true',
                         help="evaluate only")
-    parser.add_argument('--eval-freq', type=int, default=5,
+    parser.add_argument('--eval-freq', type=int, default=1,
                         help="evaluation frequency (set to -1 to test only in the end)")
     parser.add_argument('--start-eval', type=int, default=0,
                         help="start to evaluate after a specific epoch")
