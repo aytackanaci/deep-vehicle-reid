@@ -27,6 +27,7 @@ class SelectedMSELoss(nn.Module):
         # Only sum losses for landmarks that are present in the target
         # Divide through by the average number of examples present for each landmark
         mask = targets.gt(0.0)
-        loss = torch.masked_select(losses,mask).sum()/(mask.sum(0).float().mean()*self.im_size**2)
+        mean_losses = torch.stack([torch.masked_select(losses[:,x],mask[:,x]).mean() if mask[:,x].sum().gt(0) else torch.tensor(0.0).cuda() for x in range(losses.shape[1])])
+        loss = mean_losses.sum()/self.im_size**2
 
         return loss
