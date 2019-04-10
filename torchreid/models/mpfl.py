@@ -24,6 +24,7 @@ class MPFL(nn.Module):
                  train_orient=True,
                  train_landmarks=True,
                  train_grayscale=False,
+                 parts=None,
                  regress_landmarks=False,
                  fc_dims=None,
                  **kwargs):
@@ -34,6 +35,7 @@ class MPFL(nn.Module):
         self.train_orient = train_orient
         self.train_landmarks = train_landmarks
         self.train_grayscale = train_grayscale
+        self.parts = parts
         self.regress_lms = regress_landmarks
 
         self.loss = loss
@@ -96,8 +98,28 @@ class MPFL(nn.Module):
             self.fc_landmarks = nn.Linear(self.landmarks_branch.last_conv_out_ch, self.num_landmarks)
             self.fc_landmarks_id = nn.Linear(self.landmarks_branch.last_conv_out_ch, self.num_classes)
 
-        self.dropout_consensus = nn.Dropout(p=dropout_p, inplace=True)
+        if self.parts is not None:
+            self.dropout_id_parts = []
+            self.fc_id_parts = []
+            for p,_ in enumerate(self.parts):
+                if p == 0:
+                    self.id_parts_branch = nn.ModuleList([mobilenetv2ws(num_classes=num_classes,
+                                                                       loss=loss,
+                                                                       input_size=scales[0],
+                                                                       pretrained=pretrained)])
+                    self.dropout_id_parts = nn.ModuleList([nn.Dropout(p=dropout_p, inplace=True)])
+                    self.fc_id_parts = nn.ModuleList([nn.Linear(self.id_parts_branch[p].last_conv_out_ch, self.num_classes)])
+                else:
+                    self.id_parts_branch.append(mobilenetv2ws(num_classes=num_classes,
+                                                              loss=loss,
+                                                              input_size=scales[0],
+                                                              pretrained=pretrained))
+                    self.dropout_id_parts.append(nn.Dropout(p=dropout_p, inplace=True))
+                    self.fc_id_parts.append(nn.Linear(self.id_parts_branch[p].last_conv_out_ch, self.num_classes))
 
+                self.id_parts_branch[p].feature_extract_mode = True
+
+        self.dropout_consensus = nn.Dropout(p=dropout_p, inplace=True)
 
         self.fusion_last_conv_out = self.id_branch.last_conv_out_ch
         if self.train_scales:
@@ -108,6 +130,11 @@ class MPFL(nn.Module):
             self.fusion_last_conv_out += self.orient_branch.last_conv_out_ch
         if self.train_landmarks:
             self.fusion_last_conv_out += self.landmarks_branch.last_conv_out_ch
+        print(self.fusion_last_conv_out)
+        if self.parts is not None:
+            for branch in self.id_parts_branch:
+                self.fusion_last_conv_out += branch.last_conv_out_ch
+        print(self.fusion_last_conv_out)
 
         if fc_dims is not None:
             self.fc_consensus = self._construct_fc_layer(fc_dims, self.fusion_last_conv_out, dropout_p=dropout_p)
@@ -160,7 +187,7 @@ class MPFL(nn.Module):
                 if m.bias is not None:
                     init.constant_(m.bias, 0)
 
-    def forward(self, x1, x2=None, x3=None):
+    def forward(self, x1, x2=None, x3=None, x4=None):
 
         f_id = self.id_branch(x1)
         f_id = self.dropout_id(f_id)
@@ -200,6 +227,16 @@ class MPFL(nn.Module):
             y_landmarks = 0
             y_landmarks_id = 0
 
+        if self.parts is not None:
+            assert(len(x4) == len(self.parts),'Parts images must be of length'+str(len(self.parts))+'but passed images of length'+str(len(x4)))
+
+            f_id_parts = []
+            y_id_parts = []
+            for idx,img in enumerate(x4):
+                f_id_parts.append(self.dropout_id_parts[idx](self.id_parts_branch[idx](img)))
+                y_id_parts.append(self.fc_id_parts[idx](f_id_parts[idx]))
+            f_id_parts = torch.cat(f_id_parts, 1)
+
         f_fusion = f_id
 
         if self.train_scales:
@@ -210,6 +247,8 @@ class MPFL(nn.Module):
             f_fusion = torch.cat([f_fusion, f_orient], 1)
         if self.train_landmarks:
             f_fusion = torch.cat([f_fusion, f_landmarks], 1)
+        if self.parts is not None:
+            f_fusion = torch.cat([f_fusion, f_id_parts], 1)
 
         f_fusion = self.dropout_consensus(f_fusion)
 
@@ -221,7 +260,7 @@ class MPFL(nn.Module):
         y_consensus = self.fc_consensus_out(f_fusion)
 
         if self.loss == {'xent'}:
-            return y_id, y_id_small, y_id_grayscale, y_orient, y_landmarks, y_orient_id, y_landmarks_id, y_consensus
+            return y_id, y_id_small, y_id_grayscale, y_id_parts, y_orient, y_landmarks, y_orient_id, y_landmarks_id, y_consensus
         else:
             raise KeyError("Unsupported loss: {}".format(self.loss))
 

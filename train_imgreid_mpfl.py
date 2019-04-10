@@ -27,7 +27,7 @@ from torchreid.utils.generaltools import set_random_seed
 from torchreid.eval_metrics import evaluate, accuracy
 from torchreid.optimizers import init_optimizer
 
-def exp_name(cfg, train_o, train_l, train_s, train_g, dropout, criterion, fc_dims):
+def exp_name(cfg, train_o, train_l, train_s, train_g, train_p, dropout, criterion, fc_dims):
     name = [
         'e_' + cfg.prefix,
         'S_' + '-'.join(cfg.source_names),
@@ -42,13 +42,14 @@ def exp_name(cfg, train_o, train_l, train_s, train_g, dropout, criterion, fc_dim
         'b' + str(cfg.train_batch_size),
         cfg.optim,
         'lr' + str(cfg.lr),
-        #'wd' + str(cfg.weight_decay),
+        'wd' + str(cfg.weight_decay),
         'do' + str(dropout),
-        'o' + str(train_o),
-        'lm' + str(train_l),
+        'o' + ('T' if train_o else 'F'),
+        'lm' + ('T' if train_l else 'F'),
         'lmR' if cfg.regress_landmarks else 'lmC',
-        's' + str(train_s),
-        'g' + str(train_g),
+        's' + ('T' if train_s else 'F'),
+        'g' + ('T' if train_g else 'F'),
+        'p' + ('T' if train_p else 'F'),
         criterion,
         '' if fc_dims is None else 'fcs' + '-'.join(str(x) for x in fc_dims)
     ]
@@ -56,15 +57,35 @@ def exp_name(cfg, train_o, train_l, train_s, train_g, dropout, criterion, fc_dim
     return '_'.join(name)
 
 
+def get_images(imgs, use_gpu):
+    img1, img2, img_gs, imgs_parts = imgs[0], None, None, None
+    imgs = imgs[1:]
+
+    if train_scales:
+        img2 = (imgs[0].cuda() if use_gpu else imgs[0])
+        imgs = imgs[1:]
+
+    if train_grayscale:
+        img_gs = (imgs[0].cuda() if use_gpu else imgs[0])
+        imgs = imgs[1:]
+
+    if train_parts:
+        imgs_parts = imgs
+        if use_gpu:
+            imgs_parts = tuple([img.cuda() for img in imgs_parts])
+
+    return img1, img2, img_gs, imgs_parts
+
 train_scales=False
 train_grayscale=False
-train_orient=True
-train_landmarks=True
+train_orient=False
+train_landmarks=False
+train_parts=True
 soft_criterion='xent' # or kldiv
 fc_dims=[1024] # None for no extra fc fusion layers
 
 def main():
-    global args, train_orient, train_landmarks, train_scales, train_grayscale, soft_criterion, fc_dims
+    global args, train_orient, train_landmarks, train_scales, train_grayscale, train_parts, soft_criterion, fc_dims
 
     # read config
     parser = argument_parser()
@@ -85,7 +106,7 @@ def main():
         print('Training only ID and landmark branches')
         train_orient=False
 
-    args.save_dir = exp_name(args, train_orient, train_landmarks, train_scales, train_grayscale, dropout, soft_criterion, fc_dims)
+    args.save_dir = exp_name(args, train_orient, train_landmarks, train_scales, train_grayscale, train_parts, dropout, soft_criterion, fc_dims)
 
     set_random_seed(args.seed)
     if not args.use_avai_gpus: os.environ['CUDA_VISIBLE_DEVICES'] = args.gpu_devices
@@ -106,8 +127,13 @@ def main():
     else:
         scales = [224]
 
+    if train_parts:
+        parts = list(range(4))
+    else:
+        parts = None
+
     print("Initializing Landmarks data manager")
-    dm = ImageDataManager(use_gpu, scales=scales, grayscale=train_grayscale, **image_dataset_kwargs(args))
+    dm = ImageDataManager(use_gpu, scales=scales, grayscale=train_grayscale, parts=parts, **image_dataset_kwargs(args))
     trainloader_lm, trainloader, testloader_dict = dm.return_dataloaders(landmarks=True)
 
     if trainloader_lm is None:
@@ -118,7 +144,7 @@ def main():
             print('Warning: landmarks train loader not given, only id labels will be used for training')
 
     print("Initializing model: {}".format(args.arch))
-    model = models.init_model(name=args.arch, num_classes=dm.num_train_pids, num_orients=dm.num_train_orients, num_landmarks=dm.num_train_landmarks, input_size=args.width, loss={'xent'}, use_gpu=use_gpu, train_orient=train_orient, train_landmarks=train_landmarks, regress_landmarks=args.regress_landmarks, dropout=dropout, scales=scales, train_grayscale=train_grayscale, fc_dims=fc_dims)
+    model = models.init_model(name=args.arch, num_classes=dm.num_train_pids, num_orients=dm.num_train_orients, num_landmarks=dm.num_train_landmarks, input_size=args.width, loss={'xent'}, use_gpu=use_gpu, train_orient=train_orient, train_landmarks=train_landmarks, regress_landmarks=args.regress_landmarks, parts=parts, dropout=dropout, scales=scales, train_grayscale=train_grayscale, fc_dims=fc_dims)
     print("Model size: {:.3f} M".format(count_num_param(model)))
     print(model)
 
@@ -281,21 +307,8 @@ def train(epoch, model, criterion, optimizer, trainloader, use_gpu, fixbase=Fals
 
         # Only have id prediction
         imgs, pids = data[0:2]
-        if train_grayscale:
-            img_gs = imgs[-1]
-        else:
-            img_gs = None
-        if train_scales:
-            img1, img2 = imgs[0:2]
-        else:
-            img1, img2 = imgs[0], None
 
-        if use_gpu:
-            img1, pids = img1.cuda(), pids.cuda(),
-            if train_scales:
-                img2 = img2.cuda()
-            if train_grayscale:
-                img_gs = img_gs.cuda()
+        img1, img2, img_gs, imgs_parts = get_images(imgs, use_gpu)
 
         if len(data) > 4:
             # We have landmark and orientation labels
@@ -306,7 +319,7 @@ def train(epoch, model, criterion, optimizer, trainloader, use_gpu, fixbase=Fals
                 porient, plandmarks =  porient.cuda(), plandmarks.cuda()
             update_lmo = True
 
-        y_id, y_id_small, y_id_grayscale, y_orient, y_landmarks, y_orient_id, y_landmarks_id, y_consensus = model(img1, x2=img2, x3=img_gs)
+        y_id, y_id_small, y_id_grayscale, y_id_parts, y_orient, y_landmarks, y_orient_id, y_landmarks_id, y_consensus = model(img1, x2=img2, x3=img_gs, x4=imgs_parts)
 
         prec, = accuracy(y_consensus.data, pids.data)
         prec1 = prec[0]  # get top 1
@@ -331,6 +344,18 @@ def train(epoch, model, criterion, optimizer, trainloader, use_gpu, fixbase=Fals
                 total_loss_grayscale += criterion['id_soft'](y_id_grayscale, y_consensus)
 
             total_loss += total_loss_grayscale
+
+        if train_parts:
+            for idx,y in enumerate(y_id_parts):
+                if idx == 0:
+                    total_loss_parts = criterion['id'](y, pids)
+                else:
+                    total_loss_parts += criterion['id'](y, pids)
+
+                if feedback_consensus:
+                    total_loss_parts += criterion['id_soft'](y, y_consensus)
+
+            total_loss += total_loss_parts
 
         if train_orient:
             total_loss_orient = criterion['id'](y_orient_id, pids)
@@ -385,65 +410,41 @@ def test(model, test_set, name, queryloader, galleryloader, use_gpu, ranks=[1, 5
     model.eval()
 
     with torch.no_grad():
-        qf, q_pids, q_camids = [], [], []
-        for batch_idx, (imgs, pids, camids, _) in enumerate(queryloader):
-            if train_grayscale:
-                img_gs = imgs[-1]
-            else:
-                img_gs = None
-            if train_scales:
-                img1, img2 = imgs[0:2]
-            else:
-                img1, img2 = imgs[0], None
+        qf, q_pids, q_camids, q_img_paths = [], [], [], []
+        for batch_idx, (imgs, pids, camids, img_path) in enumerate(queryloader):
 
-            if use_gpu:
-                img1 = img1.cuda()
-                if train_scales:
-                    img2 = img2.cuda()
-                if train_grayscale:
-                    img_gs = img_gs.cuda()
+            img1, img2, img_gs, imgs_parts = get_images(imgs, use_gpu)
 
             end = time.time()
-            features = model(img1, x2=img2, x3=img_gs)
+            features = model(img1, x2=img2, x3=img_gs, x4=imgs_parts)
             batch_time.update(time.time() - end)
 
             features = features.data.cpu()
             qf.append(features)
             q_pids.extend(pids)
             q_camids.extend(camids)
+            q_img_paths.extend(img_path)
         qf = torch.cat(qf, 0)
         q_pids = np.asarray(q_pids)
         q_camids = np.asarray(q_camids)
 
         print("Extracted features for query set, obtained {}-by-{} matrix".format(qf.size(0), qf.size(1)))
 
-        gf, g_pids, g_camids = [], [], []
+        gf, g_pids, g_camids, g_img_path = [], [], [], []
         end = time.time()
-        for batch_idx, (imgs, pids, camids, _) in enumerate(galleryloader):
-            if train_grayscale:
-                img_gs = imgs[-1]
-            else:
-                img_gs = None
-            if train_scales:
-                img1, img2 = imgs[0:2]
-            else:
-                img1, img2 = imgs[0], None
+        for batch_idx, (imgs, pids, camids, img_path) in enumerate(galleryloader):
 
-            if use_gpu:
-                img1 = img1.cuda()
-                if train_scales:
-                    img2 = img2.cuda()
-                if train_grayscale:
-                    img_gs = img_gs.cuda()
+            img1, img2, img_gs, imgs_parts = get_images(imgs, use_gpu)
 
             end = time.time()
-            features = model(img1, x2=img2, x3=img_gs)
+            features = model(img1, x2=img2, x3=img_gs, x4=imgs_parts)
             batch_time.update(time.time() - end)
 
             features = features.data.cpu()
             gf.append(features)
             g_pids.extend(pids)
             g_camids.extend(camids)
+            g_img_paths.extend(img_path)
         gf = torch.cat(gf, 0)
         g_pids = np.asarray(g_pids)
         g_camids = np.asarray(g_camids)

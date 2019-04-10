@@ -9,6 +9,9 @@ from PIL import Image
 import random
 import numpy as np
 
+def is_odd(num):
+    return (num % 2 == 1)
+
 def crop_image(img, width, height, resize_ratio, interpolation):
     new_width, new_height = int(round(width * resize_ratio)), int(round(height * resize_ratio))
     resized_img = img.resize((new_width, new_height), interpolation)
@@ -18,6 +21,18 @@ def crop_image(img, width, height, resize_ratio, interpolation):
     y1 = int(round(random.uniform(0, y_maxrange)))
     cropped_img = resized_img.crop((x1, y1, x1 + width, y1 + height))
     return cropped_img, x1, y1
+
+# Corners: 0 - top left, 1 - top right, 2 - bottom left, 3 - bottom right
+def crop_corner_resize(img, corner, width, height):
+    centre_img = [round(x/2) for x in img.size]
+
+    i, j = 0, 0
+    if corner > 1:
+        j = centre_img[1]
+    if is_odd(corner):
+        i = centre_img[0]
+
+    return F.resized_crop(img, i, j, centre_img[1], centre_img[0], (height, width))
 
 # Transform the landmarks in the same way the image is cropped
 def stretch_and_crop_landmarks(landmarks, im_size, new_width, new_height, resize_ratio, x_start, y_start):
@@ -131,7 +146,26 @@ class NormalizeImage(Normalize):
         tensor, orient, landmarks = data
         return F.normalize(tensor, self.mean, self.std), orient, landmarks
 
-def build_transforms(height, width, is_train, inc_orient_lm=False, regress_landmarks=False, grayscale=False, **kwargs):
+class CropPart(object):
+
+    def __init__(self, corner, height, width):
+        self.corner = corner
+        self.width = width
+        self.height = height
+
+    def __call__(self, data):
+
+        crop = crop_corner_resize(data, self.corner, self.width, self.height)
+        return crop
+
+class CropPartImage(CropPart):
+
+    def __call__(self, data):
+        img, orient, landmarks = data
+        crop = crop_corner_resize(img, self.corner, self.width, self.height)
+        return crop, orient, landmarks
+
+def build_transforms(height, width, is_train, inc_orient_lm=False, regress_landmarks=False, grayscale=False, part=None, **kwargs):
     """Build transforms
 
     Args:
@@ -148,31 +182,53 @@ def build_transforms(height, width, is_train, inc_orient_lm=False, regress_landm
         image_mean = [0.485, 0.456, 0.406]
         image_std = [0.229, 0.224, 0.225]
 
+    if inc_orient_lm:
+        print('Build transforms for both image and labels')
+        # If we only want parts don't do translation or flipping
+        if part:
+            transform = [CropPartImage(part, height, width)]
+            flip = []
+        else:
+            transform = [Random2DTranslationLabels(height, width)]
+            flip = [RandomHorizontalFlipLabels()]
+        totensor = [ToTensorImage()]
+        normalise = [NormalizeImage(mean=image_mean, std=image_std)]
+        tograyscale = [GrayscaleImage(num_output_channels=3)]
+        if regress_landmarks:
+            toclassification = []
+        else:
+            toclassification = [ToClassificationLabels()]
+    else:
+        if part:
+            transform = [CropPart(part, height, width)]
+            flip = []
+        else:
+            transform = [Random2DTranslation(height, width)]
+            flip = [RandomHorizontalFlip()]
+        totensor = [ToTensor()]
+        normalise = [Normalize(mean=image_mean, std=image_std)]
+        tograyscale = [Grayscale(num_output_channels=3)]
+        toclassification = []
+
+    # Don't grayscale the images if we don't require it
+    if not grayscale:
+        tograyscale = []
+
     transforms = []
 
-    if is_train and inc_orient_lm:
-        print('Build transform for both image and labels')
-        transforms += [Random2DTranslationLabels(height, width)]
-        transforms += [RandomHorizontalFlipLabels()]
-        if grayscale:
-            transforms += [GrayscaleImage(num_output_channels=3)]
-
-        transforms += [ToTensorImage()]
-        transforms += [NormalizeImage(mean=image_mean, std=image_std)]
-        if not regress_landmarks:
-            transforms += [ToClassificationLabels()]
+    if is_train:
+        transforms += transform
+        transforms += flip
     else:
-        if is_train:
-            transforms += [Random2DTranslation(height, width)]
-            transforms += [RandomHorizontalFlip()]
+        if part:
+            transforms += transform
         else:
             transforms += [Resize((height, width))]
 
-        if grayscale:
-            transforms += [Grayscale(num_output_channels=3)]
-
-        transforms += [ToTensor()]
-        transforms += [Normalize(mean=image_mean, std=image_std)]
+    transforms += tograyscale
+    transforms += totensor
+    transforms += normalise
+    transforms += toclassification
 
     transforms = Compose(transforms)
 

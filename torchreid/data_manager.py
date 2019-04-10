@@ -72,7 +72,8 @@ class ImageDataManager(BaseDataManager):
                  scales=None,
                  keypoints_dirs=None,
                  regress_landmarks=False,
-                 grayscale=False
+                 grayscale=False,
+                 parts=None
                  ):
         super(ImageDataManager, self).__init__()
         self.use_gpu = use_gpu
@@ -115,6 +116,11 @@ class ImageDataManager(BaseDataManager):
             transform_train.append(build_transforms(height, width, is_train=True, grayscale=True))
             transform_train_lm.append(build_transforms(height, width, is_train=True, inc_orient_lm=True, regress_landmarks=regress_landmarks, grayscale=True))
             transform_test.append(build_transforms(height, width, is_train=False, grayscale=True))
+
+        if parts is not None:
+            transform_train += [build_transforms(height, width, is_train=True, part=p) for p in parts]
+            transform_train_lm += [build_transforms(height, width, is_train=True, inc_orient_lm=True, part=p) for p in parts]
+            transform_test += [build_transforms(height, width, is_train=False, part=p) for p in parts]
 
         print("=> Initializing TRAIN (source) datasets")
         self.train = []
