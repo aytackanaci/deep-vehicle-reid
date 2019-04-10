@@ -308,6 +308,8 @@ def train(epoch, model, criterion, optimizer, trainloader, use_gpu, fixbase=Fals
         # Only have id prediction
         imgs, pids = data[0:2]
 
+        if use_gpu: pids = pids.cuda()
+
         img1, img2, img_gs, imgs_parts = get_images(imgs, use_gpu)
 
         if len(data) > 4:
