@@ -194,7 +194,7 @@ class MPFL(nn.Module):
         y_id = self.fc_id(f_id)
 
         if self.train_scales:
-            assert(x2 is not None, "Small image required for training scaled branch")
+            assert x2 is not None, "Small image required for training scaled branch"
             f_id_small = self.id_small_branch(x2)
             f_id_small = self.dropout_id_small(f_id_small)
             y_id_small = self.fc_id_small(f_id_small)
@@ -202,7 +202,7 @@ class MPFL(nn.Module):
             y_id_small = 0
 
         if self.train_grayscale:
-            assert(x3 is not None, "Grayscale image required for training grayscale branch")
+            assert x3 is not None, "Grayscale image required for training grayscale branch"
             f_id_grayscale = self.id_grayscale_branch(x3)
             f_id_grayscale = self.dropout_id_grayscale(f_id_grayscale)
             y_id_grayscale = self.fc_id_grayscale(f_id_grayscale)
@@ -228,7 +228,7 @@ class MPFL(nn.Module):
             y_landmarks_id = 0
 
         if self.parts is not None:
-            assert(len(x4) == len(self.parts),'Parts images must be of length'+str(len(self.parts))+'but passed images of length'+str(len(x4)))
+            assert len(x4) == len(self.parts),'Parts images must be of length'+str(len(self.parts))+'but passed images of length'+str(len(x4))
 
             f_id_parts = []
             y_id_parts = []
