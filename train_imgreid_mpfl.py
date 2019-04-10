@@ -432,7 +432,7 @@ def test(model, test_set, name, queryloader, galleryloader, use_gpu, ranks=[1, 5
 
         print("Extracted features for query set, obtained {}-by-{} matrix".format(qf.size(0), qf.size(1)))
 
-        gf, g_pids, g_camids, g_img_path = [], [], [], []
+        gf, g_pids, g_camids, g_img_paths = [], [], [], []
         end = time.time()
         for batch_idx, (imgs, pids, camids, img_path) in enumerate(galleryloader):
 
