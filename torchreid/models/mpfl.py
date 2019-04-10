@@ -199,7 +199,7 @@ class MPFL(nn.Module):
             f_id_small = self.dropout_id_small(f_id_small)
             y_id_small = self.fc_id_small(f_id_small)
         else:
-            y_id_small = 0
+            y_id_small = None
 
         if self.train_grayscale:
             assert x3 is not None, "Grayscale image required for training grayscale branch"
@@ -207,7 +207,7 @@ class MPFL(nn.Module):
             f_id_grayscale = self.dropout_id_grayscale(f_id_grayscale)
             y_id_grayscale = self.fc_id_grayscale(f_id_grayscale)
         else:
-            y_id_grayscale = 0
+            y_id_grayscale = None
 
         if self.train_orient:
             f_orient = self.orient_branch(x1)
@@ -215,8 +215,8 @@ class MPFL(nn.Module):
             y_orient = self.fc_orient(f_orient)
             y_orient_id = self.fc_orient_id(f_orient)
         else:
-            y_orient = 0
-            y_orient_id = 0
+            y_orient = None
+            y_orient_id = None
 
         if self.train_landmarks:
             f_landmarks = self.landmarks_branch(x1)
@@ -224,8 +224,8 @@ class MPFL(nn.Module):
             y_landmarks = self.fc_landmarks(f_landmarks)
             y_landmarks_id = self.fc_landmarks_id(f_landmarks)
         else:
-            y_landmarks = 0
-            y_landmarks_id = 0
+            y_landmarks = None
+            y_landmarks_id = None
 
         if self.parts is not None:
             assert len(x4) == len(self.parts),'Parts images must be of length'+str(len(self.parts))+'but passed images of length'+str(len(x4))
@@ -236,6 +236,8 @@ class MPFL(nn.Module):
                 f_id_parts.append(self.dropout_id_parts[idx](self.id_parts_branch[idx](img)))
                 y_id_parts.append(self.fc_id_parts[idx](f_id_parts[idx]))
             f_id_parts = torch.cat(f_id_parts, 1)
+        else:
+            y_id_parts = None
 
         f_fusion = f_id
 
