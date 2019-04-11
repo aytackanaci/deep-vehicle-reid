@@ -14,7 +14,9 @@ from .ilids import iLIDS
 from .sensereid import SenseReID
 from .veri776 import VeRi776, VeRiType
 from .aic19_track2 import Aic19Track2
+
 from .cub200 import Cub200
+from .compcars import CompCars
 
 from .mars import Mars
 from .ilidsvid import iLIDSVID
@@ -47,6 +49,7 @@ __vidreid_factory = {
 
 __class_factory = {
     'veritype': VeRiType,
+    'compcars': CompCars,
     'cub200': Cub200,
 }
 
