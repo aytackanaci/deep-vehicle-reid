@@ -9,6 +9,7 @@ import torch.utils.model_zoo as model_zoo
 from torch.nn import init
 
 from .mobilenetv2_pre import mobilenetv2ws, MobileNetV2wS
+from .resnet import resnet50
 
 __all__ = ['mpfl']
 
@@ -50,64 +51,46 @@ class MPFL(nn.Module):
 
         print('Model created with num pids:',self.num_classes,'num orients:',self.num_orients,'num_landmarks:',self.num_landmarks)
 
-        self.id_branch = mobilenetv2ws(num_classes=num_classes,
-                                       loss=loss,
-                                       input_size=scales[0],
-                                       pretrained=pretrained)
-        self.id_branch.feature_extract_mode = True
-        self.dropout_id = nn.Dropout(p=dropout_p, inplace=True)
-        self.fc_id = nn.Linear(self.id_branch.last_conv_out_ch, self.num_classes)
+        self.id_branch = resnet50(num_classes,
+                                  loss,
+                                  feature_extract_mode=True)
 
         if self.train_scales:
-            self.id_small_branch = mobilenetv2ws(num_classes=num_classes,
-                                                 loss=loss,
-                                                 input_size=scales[1],
-                                                 pretrained=pretrained)
-            self.id_small_branch.feature_extract_mode = True
-            self.dropout_id_small = nn.Dropout(p=dropout_p, inplace=True)
-            self.fc_id_small = nn.Linear(self.id_small_branch.last_conv_out_ch, self.num_classes)
+            self.id_scaled_branch = resnet50(num_classes,
+                                             loss,
+                                             feature_extract_mode=True)
 
         if self.train_grayscale:
-            self.id_grayscale_branch = mobilenetv2ws(num_classes=num_classes,
-                                                     loss=loss,
-                                                     input_size=scales[0],
-                                                     pretrained=pretrained)
-            self.id_grayscale_branch.feature_extract_mode = True
-            self.dropout_id_grayscale = nn.Dropout(p=dropout_p, inplace=True)
-            self.fc_id_grayscale = nn.Linear(self.id_grayscale_branch.last_conv_out_ch, self.num_classes)
+            self.id_grayscale_branch = resnet50(num_classes,
+                                                loss,
+                                                feature_extract_mode=True)
 
         if self.train_orient:
-            self.orient_branch = mobilenetv2ws(num_classes=num_orients,
-                                               loss=loss,
-                                               input_size=scales[0],
-                                               pretrained=pretrained)
-            self.orient_branch.feature_extract_mode = True
-            self.dropout_orient = nn.Dropout(p=dropout_p, inplace=True)
-            self.fc_orient = nn.Linear(self.orient_branch.last_conv_out_ch, self.num_orients)
-            self.fc_orient_id = nn.Linear(self.orient_branch.last_conv_out_ch, self.num_classes)
+            self.orient_branch = resnet50(num_classes,
+                                          loss,
+                                          feature_extract_mode=True)
+
+            self.fc_orient = nn.Linear(self.orient_branch.get_last_conv_out(), self.num_orients)
 
         if self.train_landmarks:
-            self.landmarks_branch = mobilenetv2ws(num_classes=num_landmarks,
-                                                  loss=loss,
-                                                  input_size=scales[0],
-                                                  pretrained=pretrained)
-            self.landmarks_branch.feature_extract_mode = True
-            self.dropout_landmarks = nn.Dropout(p=dropout_p, inplace=True)
-            self.fc_landmarks = nn.Linear(self.landmarks_branch.last_conv_out_ch, self.num_landmarks)
-            self.fc_landmarks_id = nn.Linear(self.landmarks_branch.last_conv_out_ch, self.num_classes)
+            self.landmarks_branch = resnet50(num_classes,
+                                             loss,
+                                             feature_extract_mode=True)
+
+            self.fc_landmarks = nn.Linear(self.landmarks_branch.get_last_conv_out(), self.num_landmarks)
 
         self.dropout_consensus = nn.Dropout(p=dropout_p, inplace=True)
 
 
-        self.fusion_last_conv_out = self.id_branch.last_conv_out_ch
+        self.fusion_last_conv_out = self.id_branch.get_last_conv_out()
         if self.train_scales:
-            self.fusion_last_conv_out += self.id_small_branch.last_conv_out_ch
+            self.fusion_last_conv_out += self.id_scaled_branch.get_last_conv_out()
         if self.train_grayscale:
-            self.fusion_last_conv_out += self.id_grayscale_branch.last_conv_out_ch
+            self.fusion_last_conv_out += self.id_grayscale_branch.get_last_conv_out()
         if self.train_orient:
-            self.fusion_last_conv_out += self.orient_branch.last_conv_out_ch
+            self.fusion_last_conv_out += self.orient_branch.get_last_conv_out()
         if self.train_landmarks:
-            self.fusion_last_conv_out += self.landmarks_branch.last_conv_out_ch
+            self.fusion_last_conv_out += self.landmarks_branch.get_last_conv_out()
 
         if fc_dims is not None:
             self.fc_consensus = self._construct_fc_layer(fc_dims, self.fusion_last_conv_out, dropout_p=dropout_p)
@@ -162,40 +145,30 @@ class MPFL(nn.Module):
 
     def forward(self, x1, x2=None, x3=None):
 
-        f_id = self.id_branch(x1)
-        f_id = self.dropout_id(f_id)
-        y_id = self.fc_id(f_id)
+        y_id, f_id = self.id_branch(x1)
 
         if self.train_scales:
             assert(x2 is not None, "Small image required for training scaled branch")
-            f_id_small = self.id_small_branch(x2)
-            f_id_small = self.dropout_id_small(f_id_small)
-            y_id_small = self.fc_id_small(f_id_small)
+            y_id_scaled, f_id_scaled = self.id_scaled_branch(x2)
         else:
-            y_id_small = 0
+            y_id_scaled = 0
 
         if self.train_grayscale:
             assert(x3 is not None, "Grayscale image required for training grayscale branch")
-            f_id_grayscale = self.id_grayscale_branch(x3)
-            f_id_grayscale = self.dropout_id_grayscale(f_id_grayscale)
-            y_id_grayscale = self.fc_id_grayscale(f_id_grayscale)
+            y_id_grayscale, f_id_grayscale = self.id_grayscale_branch(x3)
         else:
             y_id_grayscale = 0
 
         if self.train_orient:
-            f_orient = self.orient_branch(x1)
-            f_orient = self.dropout_orient(f_orient)
+            y_orient_id, f_orient = self.orient_branch(x1)
             y_orient = self.fc_orient(f_orient)
-            y_orient_id = self.fc_orient_id(f_orient)
         else:
             y_orient = 0
             y_orient_id = 0
 
         if self.train_landmarks:
-            f_landmarks = self.landmarks_branch(x1)
-            f_landmarks = self.dropout_landmarks(f_landmarks)
+            y_landmarks_id, f_landmarks = self.landmarks_branch(x1)
             y_landmarks = self.fc_landmarks(f_landmarks)
-            y_landmarks_id = self.fc_landmarks_id(f_landmarks)
         else:
             y_landmarks = 0
             y_landmarks_id = 0
@@ -203,7 +176,7 @@ class MPFL(nn.Module):
         f_fusion = f_id
 
         if self.train_scales:
-            f_fusion = torch.cat([f_fusion, f_id_small], 1)
+            f_fusion = torch.cat([f_fusion, f_id_scaled], 1)
         if self.train_grayscale:
             f_fusion = torch.cat([f_fusion, f_id_grayscale], 1)
         if self.train_orient:
@@ -221,7 +194,7 @@ class MPFL(nn.Module):
         y_consensus = self.fc_consensus_out(f_fusion)
 
         if self.loss == {'xent'}:
-            return y_id, y_id_small, y_id_grayscale, y_orient, y_landmarks, y_orient_id, y_landmarks_id, y_consensus, f_fusion
+            return y_id, y_id_scaled, y_id_grayscale, y_orient, y_landmarks, y_orient_id, y_landmarks_id, y_consensus, f_fusion
         else:
             raise KeyError("Unsupported loss: {}".format(self.loss))
 

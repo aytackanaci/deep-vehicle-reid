@@ -57,7 +57,6 @@ class BasicBlock(nn.Module):
 
         return out
 
-
 class Bottleneck(nn.Module):
     expansion = 4
 
@@ -108,9 +107,11 @@ class ResNet(nn.Module):
                  last_stride=2,
                  fc_dims=None,
                  dropout_p=None,
+                 feature_extract_mode=False,
                  **kwargs):
         self.inplanes = 64
         super(ResNet, self).__init__()
+        self.feature_extract_mode = feature_extract_mode
         self.loss = loss
         self.feature_dim = 512 * block.expansion
 
@@ -211,10 +212,13 @@ class ResNet(nn.Module):
         if self.fc is not None:
             v = self.fc(v)
 
+        y = self.classifier(v)
+
+        if self.feature_extract_mode:
+            return y, v
+
         if not self.training:
             return v
-
-        y = self.classifier(v)
 
         if self.loss == {'xent'}:
             return y
@@ -223,6 +227,9 @@ class ResNet(nn.Module):
         else:
             raise KeyError("Unsupported loss: {}".format(self.loss))
 
+    def get_last_conv_out(self):
+        block = list(self.layer4.children())[-1]
+        return block.expansion * 512
 
 def init_pretrained_weights(model, model_url):
     """
