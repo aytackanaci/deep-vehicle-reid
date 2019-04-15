@@ -26,8 +26,9 @@ from torchreid.utils.reidtools import visualize_ranked_results
 from torchreid.utils.generaltools import set_random_seed
 from torchreid.eval_metrics import evaluate, accuracy
 from torchreid.optimizers import init_optimizer
+from rerank import reranking
 
-def exp_name(cfg, train_o, train_l, train_s, train_g, dropout, criterion, fc_dims):
+def exp_name(cfg, train_o, train_l, train_s, train_g, dropout, criterion, fc_dims, rerank):
     name = [
         'e_' + cfg.prefix,
         'S_' + '-'.join(cfg.source_names),
@@ -50,7 +51,8 @@ def exp_name(cfg, train_o, train_l, train_s, train_g, dropout, criterion, fc_dim
         's' + str(train_s),
         'g' + str(train_g),
         criterion,
-        '' if fc_dims is None else 'fcs' + '-'.join(str(x) for x in fc_dims)
+        '' if fc_dims is None else 'fcs' + '-'.join(str(x) for x in fc_dims),
+        'r' if rerank else 'd'
     ]
 
     return '_'.join(name)
@@ -62,9 +64,10 @@ train_orient=True
 train_landmarks=True
 soft_criterion='xent' # or kldiv
 fc_dims=[1024] # None for no extra fc fusion layers
+rerank=True
 
 def main():
-    global args, train_orient, train_landmarks, train_scales, train_grayscale, soft_criterion, fc_dims
+    global args, train_orient, train_landmarks, train_scales, train_grayscale, soft_criterion, fc_dims, rerank
 
     # read config
     parser = argument_parser()
@@ -85,7 +88,7 @@ def main():
         print('Training only ID and landmark branches')
         train_orient=False
 
-    args.save_dir = exp_name(args, train_orient, train_landmarks, train_scales, train_grayscale, dropout, soft_criterion, fc_dims)
+    args.save_dir = exp_name(args, train_orient, train_landmarks, train_scales, train_grayscale, dropout, soft_criterion, fc_dims, rerank)
 
     set_random_seed(args.seed)
     if not args.use_avai_gpus: os.environ['CUDA_VISIBLE_DEVICES'] = args.gpu_devices
@@ -452,11 +455,21 @@ def test(model, test_set, name, queryloader, galleryloader, use_gpu, ranks=[1, 5
 
     print("=> BatchTime(s)/BatchSize(img): {:.3f}/{}".format(batch_time.avg, args.test_batch_size))
 
-    m, n = qf.size(0), gf.size(0)
-    distmat = torch.pow(qf, 2).sum(dim=1, keepdim=True).expand(m, n) + \
-              torch.pow(gf, 2).sum(dim=1, keepdim=True).expand(n, m).t()
-    distmat.addmm_(1, -2, qf, gf.t())
-    distmat = distmat.numpy()
+    if rerank:
+        if use_gpu:
+            qf = qf.cuda()
+            gf = gf.cuda()
+        start = time.time()
+        distmat = reranking(qf, gf, use_gpu=use_gpu)
+        end = time.time()
+        print("Computin re-ranking distance matrix takes: {:.2f}s".format(end - start))
+    else:
+        m, n = qf.size(0), gf.size(0)
+        distmat = torch.pow(qf, 2).sum(dim=1, keepdim=True).expand(m, n) + \
+                  torch.pow(gf, 2).sum(dim=1, keepdim=True).expand(n, m).t()
+        distmat.addmm_(1, -2, qf, gf.t())
+        distmat = distmat.numpy()
+
 
     print("Computing CMC and mAP")
     cmc, mAP, all_AP = evaluate(distmat, q_pids, g_pids, q_camids, g_camids, use_metric_cuhk03=args.use_metric_cuhk03)
