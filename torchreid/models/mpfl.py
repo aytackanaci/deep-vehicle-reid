@@ -221,7 +221,7 @@ class MPFL(nn.Module):
         y_consensus = self.fc_consensus_out(f_fusion)
 
         if self.loss == {'xent'}:
-            return y_id, y_id_small, y_id_grayscale, y_orient, y_landmarks, y_orient_id, y_landmarks_id, y_consensus
+            return y_id, y_id_small, y_id_grayscale, y_orient, y_landmarks, y_orient_id, y_landmarks_id, y_consensus, f_fusion
         else:
             raise KeyError("Unsupported loss: {}".format(self.loss))
 

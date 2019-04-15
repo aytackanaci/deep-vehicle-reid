@@ -28,7 +28,7 @@ from torchreid.eval_metrics import evaluate, accuracy
 from torchreid.optimizers import init_optimizer
 from rerank import reranking
 
-def exp_name(cfg, train_o, train_l, train_s, train_g, dropout, criterion, fc_dims, rerank):
+def exp_name(cfg, train_o, train_l, train_s, train_g, dropout, criterion, fc_dims, rerank, tri_loss):
     name = [
         'e_' + cfg.prefix,
         'S_' + '-'.join(cfg.source_names),
@@ -52,22 +52,24 @@ def exp_name(cfg, train_o, train_l, train_s, train_g, dropout, criterion, fc_dim
         'g' + str(train_g),
         criterion,
         '' if fc_dims is None else 'fcs' + '-'.join(str(x) for x in fc_dims),
-        'r' if rerank else 'd'
+        'r' if rerank else 'd',
+        'tri' if tri_loss else 'ntri'
     ]
 
     return '_'.join(name)
 
 
 train_scales=False
-train_grayscale=False
-train_orient=True
-train_landmarks=True
+train_grayscale=True
+train_orient=False
+train_landmarks=False
 soft_criterion='xent' # or kldiv
-fc_dims=[1024] # None for no extra fc fusion layers
-rerank=True
+fc_dims=None #e.g. [1024] or None for no extra fc fusion layers
+rerank=False
+triplet_loss=False
 
 def main():
-    global args, train_orient, train_landmarks, train_scales, train_grayscale, soft_criterion, fc_dims, rerank
+    global args, train_orient, train_landmarks, train_scales, train_grayscale, soft_criterion, fc_dims, rerank, triplet_loss
 
     # read config
     parser = argument_parser()
@@ -88,7 +90,7 @@ def main():
         print('Training only ID and landmark branches')
         train_orient=False
 
-    args.save_dir = exp_name(args, train_orient, train_landmarks, train_scales, train_grayscale, dropout, soft_criterion, fc_dims, rerank)
+    args.save_dir = exp_name(args, train_orient, train_landmarks, train_scales, train_grayscale, dropout, soft_criterion, fc_dims, rerank, triplet_loss)
 
     set_random_seed(args.seed)
     if not args.use_avai_gpus: os.environ['CUDA_VISIBLE_DEVICES'] = args.gpu_devices
@@ -127,6 +129,8 @@ def main():
 
     criterion = {}
     criterion['id'] = CrossEntropyLoss(num_classes=dm.num_train_pids, use_gpu=use_gpu, label_smooth=args.label_smooth)
+    criterion['htri'] = TripletLoss(margin=args.margin)
+
     criterion['orient'] = CrossEntropyLoss(num_classes=dm.num_train_orients, use_gpu=use_gpu, label_smooth=args.label_smooth, weighting=1)
 
     if args.regress_landmarks:
@@ -309,7 +313,7 @@ def train(epoch, model, criterion, optimizer, trainloader, use_gpu, fixbase=Fals
                 porient, plandmarks =  porient.cuda(), plandmarks.cuda()
             update_lmo = True
 
-        y_id, y_id_small, y_id_grayscale, y_orient, y_landmarks, y_orient_id, y_landmarks_id, y_consensus = model(img1, x2=img2, x3=img_gs)
+        y_id, y_id_small, y_id_grayscale, y_orient, y_landmarks, y_orient_id, y_landmarks_id, y_consensus, f_consensus = model(img1, x2=img2, x3=img_gs)
 
         prec, = accuracy(y_consensus.data, pids.data)
         prec1 = prec[0]  # get top 1
@@ -357,6 +361,10 @@ def train(epoch, model, criterion, optimizer, trainloader, use_gpu, fixbase=Fals
 
         # Consensus loss according to labels
         total_loss += criterion['id'](y_consensus, pids)
+
+        if triplet_loss:
+            # Triplet loss
+            total_loss += criterion['htri'](f_consensus, pids)
 
         # Now propagate back all losses
         total_loss.backward()
