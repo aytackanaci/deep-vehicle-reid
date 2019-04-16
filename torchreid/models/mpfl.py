@@ -9,7 +9,7 @@ import torch.utils.model_zoo as model_zoo
 from torch.nn import init
 
 from .mobilenetv2_pre import mobilenetv2ws, MobileNetV2wS
-from .resnet import resnet50
+from .resnet import resnet50, resnet50_fc512, resnet101
 
 __all__ = ['mpfl']
 

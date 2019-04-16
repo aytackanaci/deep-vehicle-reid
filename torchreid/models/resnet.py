@@ -208,6 +208,7 @@ class ResNet(nn.Module):
         f = self.featuremaps(x)
         v = self.global_avgpool(f)
         v = v.view(v.size(0), -1)
+        v_out = v
 
         if self.fc is not None:
             v = self.fc(v)
@@ -215,7 +216,7 @@ class ResNet(nn.Module):
         y = self.classifier(v)
 
         if self.feature_extract_mode:
-            return y, v
+            return y, v_out
 
         if not self.training:
             return v
@@ -298,4 +299,19 @@ def resnet50_fc512(num_classes, loss, pretrained='imagenet', **kwargs):
     )
     if pretrained == 'imagenet':
         init_pretrained_weights(model, model_urls['resnet50'])
+    return model
+
+def resnet101(num_classes, loss, pretrained='imagenet', **kwargs):
+    model = ResNet(
+        num_classes=num_classes,
+        loss=loss,
+        block=Bottleneck,
+        layers=[3, 4, 23, 3],
+        last_stride=2,
+        fc_dims=None,
+        dropout_p=None,
+        **kwargs
+    )
+    if pretrained == 'imagenet':
+        init_pretrained_weights(model, model_urls['resnet101'])
     return model
