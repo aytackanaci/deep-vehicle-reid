@@ -17,7 +17,7 @@ from torch.nn import functional as F
 from args import argument_parser, image_dataset_kwargs, optimizer_kwargs
 from torchreid.data_manager import ImageDataManager
 from torchreid import models
-from torchreid.losses import CrossEntropyLoss, DeepSupervision, KLDivLoss, SelectedMSELoss
+from torchreid.losses import CrossEntropyLoss, DeepSupervision, KLDivLoss, SelectedMSELoss, TripletLoss
 from torchreid.utils.iotools import save_checkpoint, check_isfile
 from torchreid.utils.avgmeter import AverageMeter
 from torchreid.utils.loggers import Logger, RankLogger
@@ -111,6 +111,11 @@ def main():
     else:
         scales = [224]
 
+    if triplet_loss:
+        args.train_sampler='RandomIdentitySampler'
+    else:
+        args.train_sampler=''
+
     print("Initializing Landmarks data manager")
     dm = ImageDataManager(use_gpu, scales=scales, grayscale=train_grayscale, **image_dataset_kwargs(args))
     trainloader_lm, trainloader, testloader_dict = dm.return_dataloaders(landmarks=True)
@@ -123,7 +128,7 @@ def main():
             print('Warning: landmarks train loader not given, only id labels will be used for training')
 
     print("Initializing model: {}".format(args.arch))
-    model = models.init_model(name=args.arch, num_classes=dm.num_train_pids, num_orients=dm.num_train_orients, num_landmarks=dm.num_train_landmarks, input_size=args.width, loss={'xent'}, use_gpu=use_gpu, train_orient=train_orient, train_landmarks=train_landmarks, regress_landmarks=args.regress_landmarks, dropout=dropout, scales=scales, train_grayscale=train_grayscale, fc_dims=fc_dims)
+    model = models.init_model(name=args.arch, num_classes=dm.num_train_pids, num_orients=dm.num_train_orients, num_landmarks=dm.num_train_landmarks, input_size=args.width, loss={'xent'}, use_gpu=use_gpu, train_orient=train_orient, train_landmarks=train_landmarks, regress_landmarks=args.regress_landmarks, dropout_p=dropout, scales=scales, train_grayscale=train_grayscale, fc_dims=fc_dims)
     print("Model size: {:.3f} M".format(count_num_param(model)))
     print(model)
 

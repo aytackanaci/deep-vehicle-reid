@@ -9,7 +9,6 @@ import random
 import torch
 from torch.utils.data.sampler import Sampler
 
-
 class RandomIdentitySampler(Sampler):
     """
     Randomly sample N identities, then for each identity,
@@ -25,8 +24,10 @@ class RandomIdentitySampler(Sampler):
         self.batch_size = batch_size
         self.num_instances = num_instances
         self.num_pids_per_batch = self.batch_size // self.num_instances
+
         self.index_dic = defaultdict(list)
-        for index, (_, pid, _) in enumerate(self.data_source):
+        for index, data in enumerate(self.data_source):
+            pid = data[1]
             self.index_dic[pid].append(index)
         self.pids = list(self.index_dic.keys())
 
