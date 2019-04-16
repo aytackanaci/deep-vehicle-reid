@@ -62,9 +62,10 @@ def exp_name(cfg, train_o, train_l, train_s, train_g, dropout, criterion, fc_dim
 train_scales=False
 train_grayscale=True
 train_orient=False
-train_landmarks=False
+train_landmarks=True
+train_parts=False
 soft_criterion='xent' # or kldiv
-fc_dims=None #e.g. [1024] or None for no extra fc fusion layers
+fc_dims=[1024] #e.g. [1024] or None for no extra fc fusion layers
 rerank=False
 triplet_loss=False
 
@@ -318,58 +319,58 @@ def train(epoch, model, criterion, optimizer, trainloader, use_gpu, fixbase=Fals
                 porient, plandmarks =  porient.cuda(), plandmarks.cuda()
             update_lmo = True
 
-        y_id, y_id_small, y_id_grayscale, y_orient, y_landmarks, y_orient_id, y_landmarks_id, y_consensus, f_consensus = model(img1, x2=img2, x3=img_gs)
+        results = model(img1, x2=img2, x3=img_gs)
 
-        prec, = accuracy(y_consensus.data, pids.data)
+        prec, = accuracy(results['y_consensus'].data, pids.data)
         prec1 = prec[0]  # get top 1
 
         optimizer.zero_grad()
 
         # Individual branch losses
-        total_loss = criterion['id'](y_id, pids)
+        total_loss = criterion['id'](results['y_id'], pids)
         if feedback_consensus:
-            total_loss += criterion['id_soft'](y_id, y_consensus)
+            total_loss += criterion['id_soft'](results['y_id'], results['y_consensus'])
 
         if train_scales:
-            total_loss_small = criterion['id'](y_id_small, pids)
+            total_loss_scaled = criterion['id'](results['y_id_scaled'], pids)
             if feedback_consensus:
-                total_loss_small += criterion['id_soft'](y_id_small, y_consensus)
+                total_loss_scaled += criterion['id_soft'](results['y_id_scaled'], results['y_consensus'])
 
-            total_loss += total_loss_small
+            total_loss += total_loss_scaled
 
         if train_grayscale:
-            total_loss_grayscale = criterion['id'](y_id_grayscale, pids)
+            total_loss_grayscale = criterion['id'](results['y_id_grayscale'], pids)
             if feedback_consensus:
-                total_loss_grayscale += criterion['id_soft'](y_id_grayscale, y_consensus)
+                total_loss_grayscale += criterion['id_soft'](results['y_id_grayscale'], results['y_consensus'])
 
             total_loss += total_loss_grayscale
 
         if train_orient:
-            total_loss_orient = criterion['id'](y_orient_id, pids)
+            total_loss_orient = criterion['id'](results['y_orient_id'], pids)
 
             if update_lmo:
-                total_loss_orient += criterion['orient'](y_orient, porient)
+                total_loss_orient += criterion['orient'](results['y_orient'], porient)
 
             if feedback_consensus:
-                total_loss_orient += criterion['id_soft'](y_orient_id, y_consensus)
+                total_loss_orient += criterion['id_soft'](results['y_orient_id'], results['y_consensus'])
 
             total_loss += total_loss_orient
 
         if train_landmarks:
-            total_loss_landmarks = criterion['id'](y_landmarks_id, pids)
+            total_loss_landmarks = criterion['id'](results['y_landmarks_id'], pids)
             if update_lmo:
-                total_loss_landmarks += criterion['landmarks'](y_landmarks, plandmarks)
+                total_loss_landmarks += criterion['landmarks'](results['y_landmarks'], plandmarks)
             if feedback_consensus:
-                total_loss_landmarks += criterion['id_soft'](y_landmarks_id, y_consensus)
+                total_loss_landmarks += criterion['id_soft'](results['y_landmarks_id'], results['y_consensus'])
 
             total_loss += total_loss_landmarks
 
         # Consensus loss according to labels
-        total_loss += criterion['id'](y_consensus, pids)
+        total_loss += criterion['id'](results['y_consensus'], pids)
 
         if triplet_loss:
             # Triplet loss
-            total_loss += criterion['htri'](f_consensus, pids)
+            total_loss += criterion['htri'](results['f_consensus'], pids)
 
         # Now propagate back all losses
         total_loss.backward()
@@ -482,7 +483,6 @@ def test(model, test_set, name, queryloader, galleryloader, use_gpu, ranks=[1, 5
                   torch.pow(gf, 2).sum(dim=1, keepdim=True).expand(n, m).t()
         distmat.addmm_(1, -2, qf, gf.t())
         distmat = distmat.numpy()
-
 
     print("Computing CMC and mAP")
     cmc, mAP, all_AP = evaluate(distmat, q_pids, g_pids, q_camids, g_camids, use_metric_cuhk03=args.use_metric_cuhk03)

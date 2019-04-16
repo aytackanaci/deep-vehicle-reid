@@ -147,31 +147,29 @@ class MPFL(nn.Module):
 
         y_id, f_id = self.id_branch(x1)
 
+        results = {'y_id':y_id}
+
         if self.train_scales:
             assert(x2 is not None, "Small image required for training scaled branch")
             y_id_scaled, f_id_scaled = self.id_scaled_branch(x2)
-        else:
-            y_id_scaled = 0
+            results['y_id_scaled'] = y_id_scaled
 
         if self.train_grayscale:
             assert(x3 is not None, "Grayscale image required for training grayscale branch")
             y_id_grayscale, f_id_grayscale = self.id_grayscale_branch(x3)
-        else:
-            y_id_grayscale = 0
+            results['y_id_grayscale'] = y_id_grayscale
 
         if self.train_orient:
             y_orient_id, f_orient = self.orient_branch(x1)
             y_orient = self.fc_orient(f_orient)
-        else:
-            y_orient = 0
-            y_orient_id = 0
+            results['y_orient_id'] = y_orient_id
+            results['y_orient'] = y_orient
 
         if self.train_landmarks:
             y_landmarks_id, f_landmarks = self.landmarks_branch(x1)
             y_landmarks = self.fc_landmarks(f_landmarks)
-        else:
-            y_landmarks = 0
-            y_landmarks_id = 0
+            results['y_landmarks_id'] = y_landmarks_id
+            results['y_landmarks'] = y_landmarks
 
         f_fusion = f_id
 
@@ -184,6 +182,8 @@ class MPFL(nn.Module):
         if self.train_landmarks:
             f_fusion = torch.cat([f_fusion, f_landmarks], 1)
 
+        results['f_consensus'] = f_fusion
+
         f_fusion = self.dropout_consensus(f_fusion)
 
         if not self.training:
@@ -193,10 +193,9 @@ class MPFL(nn.Module):
             f_fusion = self.fc_consensus(f_fusion)
         y_consensus = self.fc_consensus_out(f_fusion)
 
-        if self.loss == {'xent'}:
-            return y_id, y_id_scaled, y_id_grayscale, y_orient, y_landmarks, y_orient_id, y_landmarks_id, y_consensus, f_fusion
-        else:
-            raise KeyError("Unsupported loss: {}".format(self.loss))
+        results['y_consensus'] = y_consensus
+
+        return results
 
 def mpfl(num_classes, num_orients, num_landmarks, loss, pretrained='imagenet', **kwargs):
 
