@@ -131,7 +131,15 @@ class NormalizeImage(Normalize):
         tensor, orient, landmarks = data
         return F.normalize(tensor, self.mean, self.std), orient, landmarks
 
-def build_transforms(height, width, is_train, inc_orient_lm=False, regress_landmarks=False, grayscale=False, **kwargs):
+class ColorJitterImage(ColorJitter):
+
+    def __call__(self, data):
+        img, orient, landmarks = data
+        transform = self.get_params(self.brightness, self.contrast,
+                                    self.saturation, self.hue)
+        return transform(img), orient, landmarks
+
+def build_transforms(height, width, is_train, inc_orient_lm=False, regress_landmarks=False, grayscale=False, colour_aug=False, **kwargs):
     """Build transforms
 
     Args:
@@ -148,31 +156,49 @@ def build_transforms(height, width, is_train, inc_orient_lm=False, regress_landm
         image_mean = [0.485, 0.456, 0.406]
         image_std = [0.229, 0.224, 0.225]
 
+    if inc_orient_lm:
+        print('Build transforms for both image and labels')
+        transform = [Random2DTranslationLabels(height, width)]
+        flip = [RandomHorizontalFlipLabels()]
+        colouraug = [ColorJitterImage(brightness=0.4, contrast=0.4, saturation=0.4, hue=0.05)]
+        totensor = [ToTensorImage()]
+        normalise = [NormalizeImage(mean=image_mean, std=image_std)]
+        tograyscale = [GrayscaleImage(num_output_channels=3)]
+        if regress_landmarks:
+            toclassification = []
+        else:
+            toclassification = [ToClassificationLabels()]
+    else:
+        transform = [Random2DTranslation(height, width)]
+        flip = [RandomHorizontalFlip()]
+        colouraug = [ColorJitter(brightness=0.4, contrast=0.4, saturation=0.4, hue=0.05)]
+        totensor = [ToTensor()]
+        normalise = [Normalize(mean=image_mean, std=image_std)]
+        tograyscale = [Grayscale(num_output_channels=3)]
+        toclassification = []
+
+    # Don't grayscale the images if we don't require it
+    if not grayscale:
+        tograyscale = []
+
+    # Don't grayscale the images if we don't require it
+    if not colour_aug:
+        colouraug = []
+    print(colouraug)
+
     transforms = []
 
-    if is_train and inc_orient_lm:
-        print('Build transform for both image and labels')
-        transforms += [Random2DTranslationLabels(height, width)]
-        transforms += [RandomHorizontalFlipLabels()]
-        if grayscale:
-            transforms += [GrayscaleImage(num_output_channels=3)]
-
-        transforms += [ToTensorImage()]
-        transforms += [NormalizeImage(mean=image_mean, std=image_std)]
-        if not regress_landmarks:
-            transforms += [ToClassificationLabels()]
+    if is_train:
+        transforms += transform
+        transforms += flip
+        transforms += colouraug
     else:
-        if is_train:
-            transforms += [Random2DTranslation(height, width)]
-            transforms += [RandomHorizontalFlip()]
-        else:
-            transforms += [Resize((height, width))]
+        transforms += [Resize((height, width))]
 
-        if grayscale:
-            transforms += [Grayscale(num_output_channels=3)]
-
-        transforms += [ToTensor()]
-        transforms += [Normalize(mean=image_mean, std=image_std)]
+    transforms += tograyscale
+    transforms += totensor
+    transforms += normalise
+    transforms += toclassification
 
     transforms = Compose(transforms)
 
