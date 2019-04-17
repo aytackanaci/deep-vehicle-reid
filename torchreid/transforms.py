@@ -184,7 +184,6 @@ def build_transforms(height, width, is_train, inc_orient_lm=False, regress_landm
     # Don't grayscale the images if we don't require it
     if not colour_aug:
         colouraug = []
-    print(colouraug)
 
     transforms = []
 
