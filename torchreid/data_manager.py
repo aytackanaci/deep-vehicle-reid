@@ -68,7 +68,7 @@ class ImageDataManager(BaseDataManager):
                  cuhk03_labeled=False, # use cuhk03's labeled or detected images
                  cuhk03_classic_split=False, # use cuhk03's classic split or 767/700 split
                  aic19_manual_labels=False,
-                 vehicleid_test_size='',
+                 vehicleid_test_size='large',
                  scales=None,
                  keypoints_dirs=None,
                  regress_landmarks=False,
@@ -91,7 +91,7 @@ class ImageDataManager(BaseDataManager):
         self.cuhk03_labeled = cuhk03_labeled
         self.cuhk03_classic_split = cuhk03_classic_split
         self.aic19_manual_labels = aic19_manual_labels
-        self.vehicleid_test_size = vehicleid_test_size,
+        self.vehicleid_test_size = vehicleid_test_size
         self.keypoints_dirs = keypoints_dirs
         if len(self.keypoints_dirs) != len(self.source_names):
             print('Warning! Keypoint directories given do not match number of source directories - keypoints not being used!')

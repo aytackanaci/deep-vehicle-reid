@@ -33,41 +33,32 @@ def exp_name(cfg, train_o, train_l, train_s, train_g, dropout, criterion, fc_dim
         'e_' + cfg.prefix,
         'S_' + '-'.join(cfg.source_names),
         'T_' + '-'.join(cfg.target_names),
-        cfg.arch,
+        cfg.arch + '_resnet50',
         'E',
         '' if cfg.resume == '' else 'r',
-        '' if cfg.fixbase_epoch is not 0 else 'w' + str(cfg.fixbase_epoch),
-        str(cfg.stepsize),
-        'm' + str(cfg.max_epoch),
-        'P',
-        'b' + str(cfg.train_batch_size),
-        cfg.optim,
         'lr' + str(cfg.lr),
-        #'wd' + str(cfg.weight_decay),
-        'do' + str(dropout),
-        'o' + str(train_o),
-        'lm' + str(train_l),
-        'lmR' if cfg.regress_landmarks else 'lmC',
-        's' + str(train_s),
-        'g' + str(train_g),
-        criterion,
+        'o' if train_o else '',
+        ('lmR' if cfg.regress_landmarks else 'lmC') if train_l else '',
+        's' if train_s else '',
+        'g' if train_g else '',
         '' if fc_dims is None else 'fcs' + '-'.join(str(x) for x in fc_dims),
-        'r' if rerank else 'd',
-        'tri' if tri_loss else 'ntri'
+        'r' if rerank else '',
+        'tri' if tri_loss else '',
+        criterion,
     ]
 
     return '_'.join(name)
 
 
-train_scales=False
+train_scales=True
 train_grayscale=True
-train_orient=False
-train_landmarks=True
+train_orient=True
+train_landmarks=False
 train_parts=False
 soft_criterion='xent' # or kldiv
 fc_dims=[1024] #e.g. [1024] or None for no extra fc fusion layers
 rerank=False
-triplet_loss=False
+triplet_loss=True
 
 def main():
     global args, train_orient, train_landmarks, train_scales, train_grayscale, soft_criterion, fc_dims, rerank, triplet_loss
