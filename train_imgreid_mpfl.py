@@ -76,7 +76,7 @@ def main():
     parser = argument_parser()
     args = parser.parse_args()
     args.fixbase_epoch = 0
-    args.arch = 'mpfl'
+    args.arch = 'mpfl_resnet50'
 
     dropout = 0.001
 
