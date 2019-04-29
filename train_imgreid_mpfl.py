@@ -58,7 +58,7 @@ train_parts=False
 soft_criterion='xent' # or kldiv
 fc_dims=[1024] #e.g. [1024] or None for no extra fc fusion layers
 rerank=False
-triplet_loss=True
+triplet_loss=False
 
 def main():
     global args, train_orient, train_landmarks, train_scales, train_grayscale, soft_criterion, fc_dims, rerank, triplet_loss
@@ -151,6 +151,9 @@ def main():
         if check_isfile(args.load_weights): # load pretrained weights but ignore layers that don't match in size
             checkpoint = torch.load(args.load_weights)
             pretrain_dict = checkpoint['state_dict']
+            if 'optimizer' in checkpoint:
+                optimizer.load_state_dict(checkpoint['optimizer'])
+                scheduler.load_state_dict(checkpoint['scheduler'])
             model_dict = model.state_dict()
             pretrain_dict = {k: v for k, v in pretrain_dict.items() if k in model_dict and model_dict[k].size() == v.size()}
             model_dict.update(pretrain_dict)
@@ -163,8 +166,18 @@ def main():
         checkpoint = torch.load(args.resume)
         model.load_state_dict(checkpoint['state_dict'])
         args.start_epoch = checkpoint['epoch'] + 1
+        rank1_score = checkpoint['rank1']
+        if 'optimizer' in checkpoint:
+            optimizer.load_state_dict(checkpoint['optimizer'])
+            scheduler.load_state_dict(checkpoint['scheduler'])
+            for state in optimizer.state.values():
+                for k, v in state.items():
+                    if isinstance(v, torch.Tensor):
+                        state[k] = v.cuda()
+
+        del checkpoint
         print("Loaded checkpoint from '{}'".format(args.resume))
-        print("- start_epoch: {}\n- rank1: {}".format(args.start_epoch, checkpoint['rank1']))
+        print("- start_epoch: {}\n- rank1: {}".format(args.start_epoch, rank1_score))
 
     if use_gpu:
         model = nn.DataParallel(model).cuda()
@@ -245,6 +258,8 @@ def main():
                 'state_dict': state_dict,
                 'rank1': rank1,
                 'epoch': epoch,
+                'optimizer' : optimizer.state_dict(),
+                'scheduler' : scheduler.state_dict(),
             }, False, osp.join(args.save_dir, 'checkpoint_ep' + str(epoch + 1) + '.pth.tar'))
 
 
@@ -253,6 +268,8 @@ def main():
         'state_dict': state_dict,
         'rank1': rank1,
         'epoch': epoch,
+        'optimizer' : optimizer.state_dict(),
+        'scheduler' : scheduler.state_dict(),
     }, False, osp.join(args.save_dir, 'checkpoint_ep' + str(epoch + 1) + '.pth.tar'))
 
     elapsed = round(time.time() - start_time)
