@@ -22,6 +22,7 @@ from .mars import Mars
 from .ilidsvid import iLIDSVID
 from .prid2011 import PRID2011
 from .dukemtmcvidreid import DukeMTMCVidReID
+from .innovateUK import innovateUK
 
 
 __imgreid_factory = {
@@ -40,6 +41,7 @@ __imgreid_factory = {
     'prid450s': PRID450S,
     'ilids': iLIDS,
     'sensereid': SenseReID,
+    'innovateuk': innovateUK,
 }
 
 

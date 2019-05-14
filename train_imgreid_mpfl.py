@@ -396,6 +396,7 @@ def test(model, test_set, name, queryloader, galleryloader, use_gpu, ranks=[1, 5
 
     with torch.no_grad():
         qf, q_pids, q_camids = [], [], []
+        q_pids_prev = None
         for batch_idx, (imgs, pids, camids, _) in enumerate(queryloader):
             if train_grayscale:
                 img_gs = imgs[-1]
@@ -421,80 +422,49 @@ def test(model, test_set, name, queryloader, galleryloader, use_gpu, ranks=[1, 5
             qf.append(features)
             q_pids.extend(pids)
             q_camids.extend(camids)
-        qf = torch.cat(qf, 0)
-        q_pids = np.asarray(q_pids)
-        q_camids = np.asarray(q_camids)
 
-        print("Extracted features for query set, obtained {}-by-{} matrix".format(qf.size(0), qf.size(1)))
+            divider = 10
+            if batch_idx > 0 and np.mod(batch_idx,divider) == 0:
+                batch_idx_div = int(batch_idx/divider)
+                qf = torch.cat(qf, 0)
+                q_pids = torch.stack(q_pids)
+                q_camids = torch.stack(q_camids)
 
-        gf, g_pids, g_camids = [], [], []
-        end = time.time()
-        for batch_idx, (imgs, pids, camids, _) in enumerate(galleryloader):
-            if train_grayscale:
-                img_gs = imgs[-1]
-            else:
-                img_gs = None
-            if train_scales:
-                img1, img2 = imgs[0:2]
-            else:
-                img1, img2 = imgs[0], None
+                print("Extracted features for query set batch {}, obtained {}-by-{} matrix".format(batch_idx_div, qf.size(0), qf.size(1)))
 
-            if use_gpu:
-                img1 = img1.cuda()
-                if train_scales:
-                    img2 = img2.cuda()
-                if train_grayscale:
-                    img_gs = img_gs.cuda()
+                np.savetxt('innUK/innUK_features_'+str(batch_idx_div)+'.csv', qf)
+                np.savetxt('innUK/innUK_pids_'+str(batch_idx_div)+'.csv', q_pids)
+                np.savetxt('innUK/innUK_camids_'+str(batch_idx_div)+'.csv', q_camids)
 
-            end = time.time()
-            features = model(img1, x2=img2, x3=img_gs)
-            batch_time.update(time.time() - end)
+                u_pids = np.unique(q_pids)
 
-            features = features.data.cpu()
-            gf.append(features)
-            g_pids.extend(pids)
-            g_camids.extend(camids)
-        gf = torch.cat(gf, 0)
-        g_pids = np.asarray(g_pids)
-        g_camids = np.asarray(g_camids)
+                mean_qfeatures = np.zeros([len(u_pids),qf.size(1)])
+                u_camids = []
+                for i, pid in enumerate(u_pids):
+                    indices = q_pids.eq(pid).nonzero().transpose(0,1)[0]
+                    qf_select = torch.index_select(qf,0,indices)
+                    camid = q_camids[indices[0].item()].item()
 
-        print("Extracted features for gallery set, obtained {}-by-{} matrix".format(gf.size(0), gf.size(1)))
+                    if q_pids_prev is not None:
+                        prev_indices = q_pids_prev.eq(pid).nonzero()
+                        if prev_indices.size(0) > 0 and \
+                           q_camids_prev[prev_indices[0].item()] == camid:
+                            prev_indices = prev_indices.transpose(0,1)[0]
+                            features = torch.cat([features,torch.index_select(qf_prev,0,prev_indices)],dim=0)
 
-    print("=> BatchTime(s)/BatchSize(img): {:.3f}/{}".format(batch_time.avg, args.test_batch_size))
+                    print('pid',pid,'camid',camid,'number of feature vectors:',qf_select.size(0))
+                    mean_qfeatures[i,:] = qf_select.mean(dim=0)
+                    u_camids.append(camid)
 
-    if rerank:
-        if use_gpu:
-            qf = qf.cuda()
-            gf = gf.cuda()
-        start = time.time()
-        distmat = reranking(qf, gf, use_gpu=use_gpu)
-        end = time.time()
-        print("Computin re-ranking distance matrix takes: {:.2f}s".format(end - start))
-    else:
-        m, n = qf.size(0), gf.size(0)
-        distmat = torch.pow(qf, 2).sum(dim=1, keepdim=True).expand(m, n) + \
-                  torch.pow(gf, 2).sum(dim=1, keepdim=True).expand(n, m).t()
-        distmat.addmm_(1, -2, qf, gf.t())
-        distmat = distmat.numpy()
+                np.savetxt('innUK/innUK_features_mean_'+str(batch_idx_div)+'.csv', mean_qfeatures)
+                np.savetxt('innUK/innUK_pids_mean_'+str(batch_idx_div)+'.csv', u_pids)
+                np.savetxt('innUK/innUK_camids_mean_'+str(batch_idx_div)+'.csv', u_camids)
 
-    print("Computing CMC and mAP")
-    cmc, mAP, all_AP = evaluate(distmat, q_pids, g_pids, q_camids, g_camids, use_metric_cuhk03=args.use_metric_cuhk03)
+                qf_prev = qf
+                q_pids_prev = q_pids
+                q_camids_prev = q_camids
 
-    if visualize:
-        visualize_ranked_results(
-            distmat, all_AP, test_set, name,
-            save_path=args.save_dir,
-            topk=100
-        )
-
-    print("Results ----------")
-    print("mAP: {:.1%}".format(mAP))
-    print("CMC curve")
-    for r in ranks:
-        print("Rank-{:<3}: {:.1%}".format(r, cmc[r-1]))
-    print("------------------")
-
-    return cmc[0], mAP
+                qf, q_pids, q_camids = [], [], []
 
 
 if __name__ == '__main__':
