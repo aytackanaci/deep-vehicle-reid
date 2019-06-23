@@ -11,11 +11,11 @@ def init_parser():
                         help='application')
     parser.add_argument('--loss', type=str, default='softmax', choices=['softmax', 'triplet'],
                         help='methodology')
-    
+
     # ************************************************************
     # Datasets
     # ************************************************************
-    parser.add_argument('--root', type=str, default='reid-data', required=True,
+    parser.add_argument('--root', type=str, default='data',
                         help='root path to data directory')
     parser.add_argument('-s', '--sources', type=str, required=True, nargs='+',
                         help='source datasets (delimited by space)')
@@ -33,10 +33,10 @@ def init_parser():
                         help='sampler for trainloader')
     parser.add_argument('--combineall', action='store_true',
                         help='combine all data in a dataset (train+query+gallery) for training')
-    
+
     # ************************************************************
     # Data augmentation
-    # ************************************************************ 
+    # ************************************************************
     parser.add_argument('--random-erase', action='store_true',
                         help='use random erasing for data augmentation')
     parser.add_argument('--color-jitter', action='store_true',
@@ -53,7 +53,7 @@ def init_parser():
                         help='how to sample images from a tracklet')
     parser.add_argument('--pooling-method', type=str, default='avg', choices=['avg', 'max'],
                         help='how to pool features over a tracklet (for video reid)')
-    
+
     # ************************************************************
     # Dataset-specific setting
     # ************************************************************
@@ -66,7 +66,7 @@ def init_parser():
 
     parser.add_argument('--market1501-500k', action='store_true',
                         help='add 500k distractors to the gallery set for market1501')
-    
+
     # ************************************************************
     # Optimization options
     # ************************************************************
@@ -75,7 +75,7 @@ def init_parser():
     parser.add_argument('--lr', type=float, default=0.0003,
                         help='initial learning rate')
     parser.add_argument('--weight-decay', type=float, default=5e-04,
-                        help='weight decay')   
+                        help='weight decay')
     # sgd
     parser.add_argument('--momentum', type=float, default=0.9,
                         help='momentum factor for sgd and rmsprop')
@@ -91,7 +91,7 @@ def init_parser():
                         help='exponential decay rate for adam\'s first moment')
     parser.add_argument('--adam-beta2', type=float, default=0.999,
                         help='exponential decay rate for adam\'s second moment')
-    
+
     # ************************************************************
     # Training hyperparameters
     # ************************************************************
@@ -101,7 +101,7 @@ def init_parser():
                         help='manual epoch number (useful when restart)')
     parser.add_argument('--batch-size', type=int, default=32,
                         help='batch size')
-    
+
     parser.add_argument('--fixbase-epoch', type=int, default=0,
                         help='number of epochs to fix base layers')
     parser.add_argument('--open-layers', type=str, nargs='+', default=['classifier'],
@@ -141,7 +141,7 @@ def init_parser():
                         help='weight to balance hard triplet loss')
     parser.add_argument('--weight-x', type=float, default=0,
                         help='weight to balance cross entropy loss (default is 0)')
-    
+
     # ************************************************************
     # Architecture
     # ************************************************************
@@ -174,7 +174,7 @@ def init_parser():
                         help='visualize ranked results, only available in evaluation mode')
     parser.add_argument('--visrank-topk', type=int, default=20,
                         help='visualize topk ranks')
-    
+
     # ************************************************************
     # Miscs
     # ************************************************************

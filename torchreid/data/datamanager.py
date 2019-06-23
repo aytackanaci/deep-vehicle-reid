@@ -118,13 +118,13 @@ class ImageDataManager(DataManager):
                  color_jitter=False, color_aug=False, use_cpu=False, split_id=0, combineall=False,
                  batch_size=32, workers=4, num_instances=4, train_sampler='',
                  cuhk03_labeled=False, cuhk03_classic_split=False, market1501_500k=False):
-        
+
         super(ImageDataManager, self).__init__(sources=sources, targets=targets, height=height, width=width,
                                                random_erase=random_erase, color_jitter=color_jitter,
                                                color_aug=color_aug, use_cpu=use_cpu)
-        
+
         print('=> Loading train (source) dataset')
-        trainset = []  
+        trainset = []
         for name in self.sources:
             trainset_ = init_image_dataset(
                 name,
@@ -267,13 +267,13 @@ class VideoDataManager(DataManager):
                  color_jitter=False, color_aug=False, use_cpu=False, split_id=0, combineall=False,
                  batch_size=3, workers=4, num_instances=4, train_sampler=None,
                  seq_len=15, sample_method='evenly'):
-        
+
         super(VideoDataManager, self).__init__(sources=sources, targets=targets, height=height, width=width,
                                                random_erase=random_erase, color_jitter=color_jitter,
                                                color_aug=color_aug, use_cpu=use_cpu)
 
         print('=> Loading train (source) dataset')
-        trainset = []  
+        trainset = []
         for name in self.sources:
             trainset_ = init_video_dataset(
                 name,
