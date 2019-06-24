@@ -10,7 +10,7 @@ import torch.nn as nn
 AVAI_OPTIMS = ['adam', 'amsgrad', 'sgd', 'rmsprop']
 
 
-def build_optimizerr(
+def build_optimizer(
         model,
         optim='adam',
         lr=0.0003,

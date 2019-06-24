@@ -12,6 +12,7 @@ import warnings
 import torch
 import torch.nn as nn
 import torch.backends.cudnn as cudnn
+from torch.optim import lr_scheduler
 
 from default_parser import (
     init_parser, imagedata_kwargs, videodata_kwargs,
@@ -37,10 +38,31 @@ from torchreid.optim.optimizer import build_optimizer
 # from torchreid.lr_schedulers import init_lr_scheduler
 from torchreid.optim.lr_scheduler import build_lr_scheduler
 
+def exp_name(cfg):
+    name = [
+        # 'e_' + cfg.prefix,
+        'S_' + '-'.join(cfg.sources),
+        'T_' + '-'.join(cfg.targets),
+        cfg.arch,
+        'E',
+        '' if cfg.resume == '' else 'r',
+        '' if cfg.fixbase_epoch is 0 else 'warmup' + str(cfg.fixbase_epoch),
+        str(cfg.stepsize),
+        'm' + str(cfg.max_epoch),
+        'P',
+        'b' + str(cfg.batch_size),
+        cfg.optim,
+        'lr' + str(cfg.lr),
+        'wd' + str(cfg.weight_decay),
+        ]
+
+    return '_'.join(name)
 
 # global variables
 parser = init_parser()
 args = parser.parse_args()
+# args.start_eval = args.max_epoch - 20 -1
+args.save_dir = exp_name(args)
 
 
 def main():
@@ -76,7 +98,8 @@ def main():
 
     criterion = CrossEntropyLoss(num_classes=dm.num_train_pids, use_gpu=use_gpu, label_smooth=args.label_smooth)
     optimizer = build_optimizer(model, **optimizer_kwargs(args))
-    scheduler = build_lr_scheduler(optimizer, **lr_scheduler_kwargs(args))
+    # scheduler = build_lr_scheduler(optimizer, **lr_scheduler_kwargs(args))
+    scheduler = lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.1, patience=5, verbose=True, threshold=1e-04)
 
     if args.resume and check_isfile(args.resume):
         args.start_epoch = resume_from_checkpoint(args.resume, model, optimizer=optimizer)
@@ -113,9 +136,9 @@ def main():
         optimizer.load_state_dict(initial_optim_state)
 
     for epoch in range(args.start_epoch, args.max_epoch):
-        train(epoch, model, criterion, optimizer, trainloader, use_gpu)
+        loss = train(epoch, model, criterion, optimizer, trainloader, use_gpu)
 
-        scheduler.step()
+        scheduler.step(loss)
 
         if (epoch + 1) > args.start_eval and args.eval_freq > 0 and (epoch + 1) % args.eval_freq == 0 or (epoch + 1) == args.max_epoch:
             print('=> Test')
@@ -189,6 +212,7 @@ def train(epoch, model, criterion, optimizer, trainloader, use_gpu, fixbase=Fals
 
         end = time.time()
 
+    return losses.avg
 
 def test(model, queryloader, galleryloader, use_gpu, ranks=[1, 5, 10, 20], return_distmat=False):
     batch_time = AverageMeter()
