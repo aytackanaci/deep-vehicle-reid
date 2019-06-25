@@ -12,7 +12,10 @@ import warnings
 import torch
 import torch.nn as nn
 import torch.backends.cudnn as cudnn
+
 from torch.optim import lr_scheduler
+
+from tensorboardX import SummaryWriter
 
 from default_parser import (
     init_parser, imagedata_kwargs, videodata_kwargs,
@@ -53,7 +56,7 @@ def exp_name(cfg):
         'b' + str(cfg.batch_size),
         cfg.optim,
         'lr' + str(cfg.lr),
-        'wd' + str(cfg.weight_decay),
+        # 'wd' + str(cfg.weight_decay),
         ]
 
     return '_'.join(name)
@@ -98,8 +101,8 @@ def main():
 
     criterion = CrossEntropyLoss(num_classes=dm.num_train_pids, use_gpu=use_gpu, label_smooth=args.label_smooth)
     optimizer = build_optimizer(model, **optimizer_kwargs(args))
-    # scheduler = build_lr_scheduler(optimizer, **lr_scheduler_kwargs(args))
-    scheduler = lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.1, patience=5, verbose=True, threshold=1e-04)
+    scheduler = build_lr_scheduler(optimizer, **lr_scheduler_kwargs(args))
+    # scheduler = lr_scheduler.ReduceLROnPlateau(optimizer, mode='min', factor=0.1, patience=10, verbose=True, threshold=1e-04)
 
     if args.resume and check_isfile(args.resume):
         args.start_epoch = resume_from_checkpoint(args.resume, model, optimizer=optimizer)
@@ -125,20 +128,29 @@ def main():
     ranklogger = RankLogger(args.sources, args.targets)
     print('=> Start training')
 
+
+    # Tensorboard
+    writer = SummaryWriter(osp.join('runs', args.save_dir))
+    print("=> Start training")
+
+
     if args.fixbase_epoch > 0:
         print('Train {} for {} epochs while keeping other layers frozen'.format(args.open_layers, args.fixbase_epoch))
         initial_optim_state = optimizer.state_dict()
 
         for epoch in range(args.fixbase_epoch):
-            train(epoch, model, criterion, optimizer, trainloader, use_gpu, fixbase=True)
+            train(epoch, model, criterion, optimizer, trainloader, use_gpu, writer, fixbase=True)
+            writer.add_scalar('train/loss', loss, epoch+1)
 
         print('Done. All layers are open to train for {} epochs'.format(args.max_epoch))
         optimizer.load_state_dict(initial_optim_state)
 
     for epoch in range(args.start_epoch, args.max_epoch):
-        loss = train(epoch, model, criterion, optimizer, trainloader, use_gpu)
+        loss = train(epoch, model, criterion, optimizer, trainloader, use_gpu, writer)
+        writer.add_scalar('train/loss', loss, epoch+1)
 
-        scheduler.step(loss)
+        # scheduler.step(loss)
+        scheduler.step()
 
         if (epoch + 1) > args.start_eval and args.eval_freq > 0 and (epoch + 1) % args.eval_freq == 0 or (epoch + 1) == args.max_epoch:
             print('=> Test')
@@ -147,7 +159,9 @@ def main():
                 print('Evaluating {} ...'.format(name))
                 queryloader = testloader_dict[name]['query']
                 galleryloader = testloader_dict[name]['gallery']
-                rank1 = test(model, queryloader, galleryloader, use_gpu)
+                rank1, mAP = test(model, queryloader, galleryloader, use_gpu)
+                writer.add_scalar(name + '_test/top1', rank1, epoch+1)
+                writer.add_scalar(name + '_test/mAP', mAP, epoch+1)
                 ranklogger.write(name, epoch + 1, rank1)
 
             save_checkpoint({
@@ -164,11 +178,12 @@ def main():
     ranklogger.show_summary()
 
 
-def train(epoch, model, criterion, optimizer, trainloader, use_gpu, fixbase=False):
+def train(epoch, model, criterion, optimizer, trainloader, use_gpu, writer, fixbase=False):
     losses = AverageMeter()
     accs = AverageMeter()
     batch_time = AverageMeter()
     data_time = AverageMeter()
+    epoch_iterations = len(trainloader)
 
     model.train()
 
@@ -194,6 +209,7 @@ def train(epoch, model, criterion, optimizer, trainloader, use_gpu, fixbase=Fals
         optimizer.step()
 
         batch_time.update(time.time() - end)
+        writer.add_scalar('iter/loss', loss, epoch*epoch_iterations+batch_idx)
 
         losses.update(loss.item(), pids.size(0))
 
@@ -277,7 +293,7 @@ def test(model, queryloader, galleryloader, use_gpu, ranks=[1, 5, 10, 20], retur
 
     if return_distmat:
         return distmat
-    return cmc[0]
+    return cmc[0], mAP
 
 
 if __name__ == '__main__':
