@@ -7,9 +7,10 @@ import torch
 import torch.nn as nn
 from .adamw import AdamW as adamw1
 from .adamW import AdamW
+from .sgd_caffe import SGD_caffe
 
 
-AVAI_OPTIMS = ['adam', 'amsgrad', 'sgd', 'rmsprop', 'adamw']
+AVAI_OPTIMS = ['adam', 'amsgrad', 'sgd', 'rmsprop', 'adamw', "sgd_caffe"]
 
 
 def build_optimizer(
@@ -120,6 +121,16 @@ def build_optimizer(
 
     elif optim == 'sgd':
         optimizer = torch.optim.SGD(
+            param_groups,
+            lr=lr,
+            momentum=momentum,
+            weight_decay=weight_decay,
+            dampening=sgd_dampening,
+            nesterov=sgd_nesterov,
+        )
+
+    elif optim == 'sgd_caffe':
+        optimizer = SGD_caffe(
             param_groups,
             lr=lr,
             momentum=momentum,
