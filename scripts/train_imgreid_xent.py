@@ -43,7 +43,7 @@ from torchreid.optim.lr_scheduler import build_lr_scheduler
 
 def exp_name(cfg):
     name = [
-        # 'e_' + cfg.prefix,
+        'e_' + cfg.prefix,
         'S_' + '-'.join(cfg.sources),
         'T_' + '-'.join(cfg.targets),
         cfg.arch,
@@ -56,7 +56,7 @@ def exp_name(cfg):
         'b' + str(cfg.batch_size),
         cfg.optim,
         'lr' + str(cfg.lr),
-        # 'wd' + str(cfg.weight_decay),
+        'wd' + str(cfg.weight_decay),
         ]
 
     return '_'.join(name)
