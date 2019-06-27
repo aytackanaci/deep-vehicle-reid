@@ -5,9 +5,11 @@ import warnings
 
 import torch
 import torch.nn as nn
+from .adamw import AdamW as adamw1
+from .adamW import AdamW
 
 
-AVAI_OPTIMS = ['adam', 'amsgrad', 'sgd', 'rmsprop']
+AVAI_OPTIMS = ['adam', 'amsgrad', 'sgd', 'rmsprop', 'adamw']
 
 
 def build_optimizer(
@@ -133,6 +135,14 @@ def build_optimizer(
             momentum=momentum,
             weight_decay=weight_decay,
             alpha=rmsprop_alpha,
+        )
+
+    elif optim  == 'adamw':
+        optimizer = AdamW(
+                param_groups,
+                lr=lr,
+                betas=(adam_beta1, adam_beta2),
+                weight_decay=weight_decay,
         )
 
     return optimizer
